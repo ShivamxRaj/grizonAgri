@@ -1,8 +1,11 @@
 {
-  "name": "grizon-agri-app",
+  "name": "grizon-agri-monorepo",
   "private": true,
   "version": "0.1.0",
+  "workspaces": [
+    "frontend"
+  ],
   "scripts": {
-    "build": "npm install --prefix frontend && npm run build --prefix frontend"
+    "build": "npm run build --workspace=frontend"
   }
 }
