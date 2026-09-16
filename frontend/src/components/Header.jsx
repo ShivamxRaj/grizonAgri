@@ -25,19 +25,19 @@ export default function Header({ onToggleMobileSidebar }) {
   const getPageTitle = () => {
     switch (location.pathname) {
       case '/mandi':
-        return t('tile_mandi') || 'Mandi Market Prices'
+        return t('tile_mandi') || 'Mandi Prices'
       case '/weather':
-        return t('tile_weather') || 'Weather & Spray Advisory'
+        return t('tile_weather') || 'Weather'
       case '/disease':
-        return t('tile_disease') || 'Crop Disease Scanner'
+        return t('tile_disease') || 'Disease Scan'
       case '/planner':
-        return t('tile_planner') || 'Crop Season Planner'
+        return t('tile_planner') || 'Crop Planner'
       case '/finance':
-        return t('tile_finance') || 'Govt Schemes & Subsidies'
+        return t('tile_finance') || 'Farm Financials'
       case '/chat':
       case '/':
       default:
-        return 'Grizon Agri AI Assistant'
+        return 'Grizon Agri'
     }
   }
 
@@ -57,7 +57,7 @@ export default function Header({ onToggleMobileSidebar }) {
         </button>
 
         <div className="topbar-title-wrap">
-          <span className="header-title-text" style={{ fontWeight: 600, fontSize: '1.05rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <span className="header-title-text">
             {getPageTitle()}
           </span>
         </div>
