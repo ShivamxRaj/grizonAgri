@@ -8,17 +8,37 @@ export const detectGenderFromName = (nameStr = '') => {
   if (!nameStr) return 'male'
   const lower = nameStr.toLowerCase().trim()
   const words = lower.split(/\s+/)
+
+  // If explicitly 'singh', 'kumar', 'mr' present, it's male (e.g. Gurpreet Singh)
+  if (words.includes('singh') || words.includes('kumar') || words.includes('mr') || words.includes('sir')) {
+    return 'male'
+  }
+
+  // Explicit female suffixes and keywords
   const femaleKeywords = [
     'kaur', 'devi', 'kumari', 'mrs', 'miss', 'ms', 'priya', 'pooja', 'anjali', 
     'sunita', 'lakshmi', 'simran', 'anita', 'geeta', 'seema', 'rekha', 'pinky', 
     'neha', 'divya', 'kiran', 'suman', 'monika', 'aarti', 'jyoti', 'sonia', 
     'shalu', 'riya', 'taniya', 'kavita', 'sneha', 'meena', 'radha', 'sita', 
     'gita', 'rita', 'chanda', 'mamta', 'usha', 'sarita', 'sudha', 'savitri',
+    'harpreet', 'gurpreet', 'manpreet', 'jaspreet', 'navpreet', 'amrit',
     'female', 'woman', 'girl'
   ]
+
   if (words.some(w => femaleKeywords.includes(w))) {
     return 'female'
   }
+
+  // Check endings like -preet, -kaur, -jeet, -devi, -kumari
+  if (lower.endsWith('preet') || lower.endsWith('kaur') || lower.endsWith('jeet') || lower.endsWith('devi') || lower.endsWith('kumari')) {
+    return 'female'
+  }
+
+  const commonFemaleNames = ['harpreet','gurpreet','manpreet','jaspreet','simran','kiranjeet','amrit','priya','pooja','anjali','sunita','neha','divya','kiran','suman','aarti','jyoti','sonia','riya','seema','geeta','rekha','taniya','kavita','sneha','meena','radha']
+  if (words.some(w => commonFemaleNames.includes(w))) {
+    return 'female'
+  }
+
   return 'male'
 }
 
@@ -26,7 +46,18 @@ export function AuthProvider({ children }) {
   const [farmer, setFarmer] = useState(() => {
     try {
       const saved = localStorage.getItem('grizon_farmer')
-      return saved ? JSON.parse(saved) : null
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed && parsed.name) {
+          const detected = detectGenderFromName(parsed.name)
+          if (detected !== parsed.gender) {
+            parsed.gender = detected
+            localStorage.setItem('grizon_farmer', JSON.stringify(parsed))
+          }
+        }
+        return parsed
+      }
+      return null
     } catch {
       return null
     }

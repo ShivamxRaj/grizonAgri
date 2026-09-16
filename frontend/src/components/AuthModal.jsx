@@ -217,7 +217,7 @@ export default function AuthModal() {
                 <User size={24} />
               </div>
               <h2>Profile Setup</h2>
-              <p>Please enter your full name & avatar preference</p>
+              <p>Please enter your full name</p>
             </div>
 
             {/* Name Input */}
@@ -225,7 +225,7 @@ export default function AuthModal() {
               <label>Full Name</label>
               <input
                 type="text"
-                placeholder="e.g. Gurpreet Kaur / Priya Sharma"
+                placeholder="e.g. Harpreet Kaur / Priya Sharma"
                 value={name}
                 onChange={(e) => handleNameInputChange(e.target.value)}
                 required
@@ -233,28 +233,7 @@ export default function AuthModal() {
               />
             </div>
 
-            {/* Gender Selection Pills */}
-            <div className="auth-input-group" style={{ marginTop: '0.5rem' }}>
-              <label>Avatar / gender</label>
-              <div className="auth-gender-pills">
-                <button
-                  type="button"
-                  className={`gender-pill-btn ${gender === 'male' ? 'active' : ''}`}
-                  onClick={() => setGender('male')}
-                >
-                  👨‍🌾 Male Farmer
-                </button>
-                <button
-                  type="button"
-                  className={`gender-pill-btn ${gender === 'female' ? 'active' : ''}`}
-                  onClick={() => setGender('female')}
-                >
-                  👩‍🌾 Female Farmer
-                </button>
-              </div>
-            </div>
-
-            <button type="submit" className="auth-primary-btn" disabled={loading} style={{ marginTop: '1rem' }}>
+            <button type="submit" className="auth-primary-btn" disabled={loading} style={{ marginTop: '0.5rem' }}>
               {loading ? 'Saving...' : 'Complete & Start'}
               <ArrowRight size={18} />
             </button>
