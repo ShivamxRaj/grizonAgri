@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext'
 
 export default function Header({ onToggleMobileSidebar }) {
   const { t } = useLang()
-  const { farmer, isAuthenticated, openAuthModal, logout } = useAuth()
+  const { farmer, isAuthenticated, openAuthModal, logout, updateGender } = useAuth()
   const location = useLocation()
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false)
   const dropdownRef = useRef(null)
@@ -110,6 +110,26 @@ export default function Header({ onToggleMobileSidebar }) {
                   <div className="profile-detail-item">
                     <MapPin size={14} className="detail-icon" />
                     <span>Location: <b>{farmer.district || 'Ludhiana'}, {farmer.state || 'Punjab'}</b></span>
+                  </div>
+
+                  <div className="profile-detail-item profile-gender-toggle-row">
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Avatar:</span>
+                    <div className="mini-gender-toggle">
+                      <button 
+                        type="button"
+                        className={`mini-gender-btn ${farmer?.gender === 'male' ? 'active' : ''}`}
+                        onClick={() => updateGender('male')}
+                      >
+                        👨‍🌾 Male
+                      </button>
+                      <button 
+                        type="button"
+                        className={`mini-gender-btn ${farmer?.gender === 'female' ? 'active' : ''}`}
+                        onClick={() => updateGender('female')}
+                      >
+                        👩‍🌾 Female
+                      </button>
+                    </div>
                   </div>
                 </div>
 

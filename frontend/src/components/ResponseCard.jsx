@@ -38,7 +38,7 @@ export default function ResponseCard({ data }) {
   }
 
   const shareWhatsApp = () => {
-    const text = `🌾 *Grizon Agri Advisory*\n\n🚨 *${title}*\n\n${bullets.map(b => `• ${b}`).join('\n')}\n\n💧 *Dosage*: ${dosage}\n\n— Voice-first Agri AI by Grizon AI`
+    const text = `🌾 *Grizon Agri Advisory*\n\n🚨 *${title}*\n\n${bullets.map(b => `• ${b}`).join('\n')}\n\n💧 *Dosage*: ${dosage}\n\n— Voice-first Agri AI by Grizon`
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
   }
 

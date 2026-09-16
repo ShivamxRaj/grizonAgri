@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { X, ShieldCheck, User, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react'
-import { useAuth } from '../context/AuthContext'
+import { useAuth, detectGenderFromName } from '../context/AuthContext'
 import GrizonAgriLogo from '../components/GrizonAgriLogo'
 
 export default function AuthModal() {
@@ -10,6 +10,7 @@ export default function AuthModal() {
   const [phone, setPhone] = useState('')
   const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', ''])
   const [name, setName] = useState('')
+  const [gender, setGender] = useState('male')
   const [farmerId, setFarmerId] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -21,6 +22,7 @@ export default function AuthModal() {
       setPhone('')
       setOtpDigits(['', '', '', '', '', ''])
       setName('')
+      setGender('male')
       setError('')
     }
   }, [isAuthModalOpen])
@@ -48,11 +50,12 @@ export default function AuthModal() {
   }
 
   const handleOtpChange = (index, value) => {
-    if (value.length > 1) value = value.slice(-1)
-    const nextDigits = [...otpDigits]
-    nextDigits[index] = value
-    setOtpDigits(nextDigits)
+    if (!/^\d*$/.test(value)) return
+    const newOtp = [...otpDigits]
+    newOtp[index] = value.slice(-1)
+    setOtpDigits(newOtp)
 
+    // Auto focus next box
     if (value && index < 5) {
       const nextInput = document.getElementById(`otp-input-${index + 1}`)
       if (nextInput) nextInput.focus()
@@ -71,7 +74,7 @@ export default function AuthModal() {
     setError('')
     const code = otpDigits.join('')
     if (code.length < 6) {
-      setError('Please enter 6-digit OTP code')
+      setError('Please enter complete 6-digit OTP code')
       return
     }
 
@@ -93,6 +96,14 @@ export default function AuthModal() {
     }
   }
 
+  const handleNameInputChange = (val) => {
+    setName(val)
+    const detected = detectGenderFromName(val)
+    if (detected) {
+      setGender(detected)
+    }
+  }
+
   const handleProfileSubmit = async (e) => {
     e.preventDefault()
     setError('')
@@ -105,7 +116,8 @@ export default function AuthModal() {
     try {
       await saveProfile({
         farmerId,
-        name: name.trim()
+        name: name.trim(),
+        gender
       })
       closeAuthModal()
     } catch (err) {
@@ -205,7 +217,7 @@ export default function AuthModal() {
                 <User size={24} />
               </div>
               <h2>Profile Setup</h2>
-              <p>Please enter your full name</p>
+              <p>Please enter your full name & avatar preference</p>
             </div>
 
             {/* Name Input */}
@@ -213,15 +225,36 @@ export default function AuthModal() {
               <label>Full Name</label>
               <input
                 type="text"
-                placeholder="e.g. Gurpreet Singh / Harpreet Kaur"
+                placeholder="e.g. Gurpreet Kaur / Priya Sharma"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => handleNameInputChange(e.target.value)}
                 required
                 autoFocus
               />
             </div>
 
-            <button type="submit" className="auth-primary-btn" disabled={loading}>
+            {/* Gender Selection Pills */}
+            <div className="auth-input-group" style={{ marginTop: '0.5rem' }}>
+              <label>Avatar / gender</label>
+              <div className="auth-gender-pills">
+                <button
+                  type="button"
+                  className={`gender-pill-btn ${gender === 'male' ? 'active' : ''}`}
+                  onClick={() => setGender('male')}
+                >
+                  👨‍🌾 Male Farmer
+                </button>
+                <button
+                  type="button"
+                  className={`gender-pill-btn ${gender === 'female' ? 'active' : ''}`}
+                  onClick={() => setGender('female')}
+                >
+                  👩‍🌾 Female Farmer
+                </button>
+              </div>
+            </div>
+
+            <button type="submit" className="auth-primary-btn" disabled={loading} style={{ marginTop: '1rem' }}>
               {loading ? 'Saving...' : 'Complete & Start'}
               <ArrowRight size={18} />
             </button>

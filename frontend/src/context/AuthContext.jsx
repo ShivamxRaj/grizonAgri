@@ -4,6 +4,24 @@ const AuthContext = createContext(null)
 
 const API_BASE = 'http://127.0.0.1:8000/api/v1/auth'
 
+export const detectGenderFromName = (nameStr = '') => {
+  if (!nameStr) return 'male'
+  const lower = nameStr.toLowerCase().trim()
+  const words = lower.split(/\s+/)
+  const femaleKeywords = [
+    'kaur', 'devi', 'kumari', 'mrs', 'miss', 'ms', 'priya', 'pooja', 'anjali', 
+    'sunita', 'lakshmi', 'simran', 'anita', 'geeta', 'seema', 'rekha', 'pinky', 
+    'neha', 'divya', 'kiran', 'suman', 'monika', 'aarti', 'jyoti', 'sonia', 
+    'shalu', 'riya', 'taniya', 'kavita', 'sneha', 'meena', 'radha', 'sita', 
+    'gita', 'rita', 'chanda', 'mamta', 'usha', 'sarita', 'sudha', 'savitri',
+    'female', 'woman', 'girl'
+  ]
+  if (words.some(w => femaleKeywords.includes(w))) {
+    return 'female'
+  }
+  return 'male'
+}
+
 export function AuthProvider({ children }) {
   const [farmer, setFarmer] = useState(() => {
     try {
@@ -72,11 +90,14 @@ export function AuthProvider({ children }) {
     }
 
     const mockToken = `token-f-${Date.now()}`
+    const initialName = farmer?.name || ''
+    const initialGender = farmer?.gender || (initialName ? detectGenderFromName(initialName) : 'male')
+
     const mockFarmer = {
       farmer_id: `f-${phoneNumber}`,
       phone_number: phoneNumber,
-      name: farmer?.name || '',
-      gender: 'male',
+      name: initialName,
+      gender: initialGender,
       preferred_language: 'pa-IN',
       district: 'Ludhiana',
       state: 'Punjab',
@@ -93,11 +114,12 @@ export function AuthProvider({ children }) {
   }
 
   const saveProfile = async ({ farmerId, name, gender, preferredLanguage, district, primaryCrops }) => {
+    const finalGender = gender || (name ? detectGenderFromName(name) : (farmer?.gender || 'male'))
     const updatedFarmer = {
       farmer_id: farmerId || farmer?.farmer_id || `f-${Date.now()}`,
       phone_number: farmer?.phone_number || '9876543210',
       name: name,
-      gender: gender || farmer?.gender || 'male',
+      gender: finalGender,
       preferred_language: preferredLanguage || farmer?.preferred_language || 'pa-IN',
       district: district || farmer?.district || 'Ludhiana',
       state: 'Punjab',
@@ -131,6 +153,15 @@ export function AuthProvider({ children }) {
     return updatedFarmer
   }
 
+  const updateGender = (newGender) => {
+    setFarmer(prev => {
+      if (!prev) return prev
+      const updated = { ...prev, gender: newGender }
+      localStorage.setItem('grizon_farmer', JSON.stringify(updated))
+      return updated
+    })
+  }
+
   const logout = () => {
     setFarmer(null)
     setToken(null)
@@ -150,6 +181,7 @@ export function AuthProvider({ children }) {
         requestOTP,
         verifyOTP,
         saveProfile,
+        updateGender,
         logout
       }}
     >

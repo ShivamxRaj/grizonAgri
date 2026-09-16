@@ -66,7 +66,7 @@ export default function Sidebar({ isOpen, onClose }) {
             <GrizonAgriLogo size={38} />
             <div>
               <h1 className="brand-title">Grizon Agri</h1>
-              <span className="brand-sub">by Grizon AI</span>
+              <span className="brand-sub">by Grizon</span>
             </div>
           </Link>
 
