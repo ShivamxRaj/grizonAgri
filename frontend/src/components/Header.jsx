@@ -57,7 +57,9 @@ export default function Header({ onToggleMobileSidebar }) {
         </button>
 
         <div className="topbar-title-wrap">
-          <span style={{ fontWeight: 600, fontSize: '1.05rem' }}>{getPageTitle()}</span>
+          <span className="header-title-text" style={{ fontWeight: 600, fontSize: '1.05rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {getPageTitle()}
+          </span>
         </div>
       </div>
 
@@ -92,10 +94,10 @@ export default function Header({ onToggleMobileSidebar }) {
                   />
                   <div className="profile-card-titles">
                     <h4 className="profile-farmer-name">{farmer.name}</h4>
-                    <div className="profile-verified-phone">
-                      <Phone size={12} />
-                      <span>+91 {farmer.phone_number}</span>
-                      <span className="verified-badge" title="Phone OTP Verified">
+                    <div className="profile-verified-phone" style={{ whiteSpace: 'nowrap', flexWrap: 'nowrap' }}>
+                      <Phone size={12} style={{ flexShrink: 0 }} />
+                      <span style={{ whiteSpace: 'nowrap' }}>+91-{farmer.phone_number}</span>
+                      <span className="verified-badge" title="Phone OTP Verified" style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
                         <CheckCircle size={12} /> Verified
                       </span>
                     </div>

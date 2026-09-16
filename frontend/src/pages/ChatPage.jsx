@@ -20,7 +20,7 @@ import GrizonAgriLogo from '../components/GrizonAgriLogo'
 
 export default function ChatPage() {
   const { t, lang } = useLang()
-  const { farmer } = useAuth()
+  const { farmer, isAuthenticated, openAuthModal } = useAuth()
   const location = useLocation()
 
   const rawName = farmer?.name?.trim() || ''
@@ -89,6 +89,17 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [playingAudioId, setPlayingAudioId] = useState(null)
   const messagesEndRef = useRef(null)
+  const prevAuthRef = useRef(isAuthenticated)
+
+  // Automatically open a fresh personalized conversation page upon signup/login
+  useEffect(() => {
+    if (!prevAuthRef.current && isAuthenticated) {
+      setMessages([])
+      setSelectedImage(null)
+      setInputText('')
+    }
+    prevAuthRef.current = isAuthenticated
+  }, [isAuthenticated])
 
   // Synchronize demo messages dynamically when active language changes
   useEffect(() => {
@@ -123,6 +134,12 @@ export default function ChatPage() {
   const handleSend = async (queryText, isVoiceMsg = false) => {
     const textToSend = queryText || inputText
     if (!textToSend.trim() && !selectedImage) return
+
+    // Auth Guard: Require signup / login before chatting
+    if (!isAuthenticated) {
+      openAuthModal()
+      return
+    }
 
     const userMsgId = 'usr-' + Date.now()
     const userMsg = {
