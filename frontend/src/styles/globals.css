@@ -998,13 +998,19 @@ h1, h2, h3, h4, h5, h6 {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Responsive adjustments */
+/* Universal Device Responsive Design System */
+.dock-text-input {
+  min-width: 0;
+}
+
 @media (max-width: 768px) {
   .app-sidebar {
     position: fixed;
     top: 0;
     left: 0;
     bottom: 0;
+    width: 280px;
+    z-index: 999;
     transform: translateX(-100%);
     box-shadow: var(--shadow-lg);
   }
@@ -1019,15 +1025,64 @@ h1, h2, h3, h4, h5, h6 {
 
   .prompt-chips-grid {
     grid-template-columns: 1fr;
+    gap: 0.6rem;
   }
 
   .floating-dock-container {
-    width: calc(100% - 1.5rem);
-    bottom: 0.75rem;
+    width: calc(100% - 1rem);
+    bottom: 0.5rem;
+  }
+
+  .dock-controls-row {
+    gap: 0.35rem;
+  }
+
+  .dock-action-btn, .mic-btn-dock, .send-btn-dock {
+    width: 38px;
+    height: 38px;
   }
 
   .message-bubble {
-    max-width: 90%;
+    max-width: 92%;
+    font-size: 0.9rem;
+  }
+
+  .card-header-bar {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .page-container {
+    padding: 1rem 0.75rem 6rem 0.75rem;
+  }
+
+  .grid-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .welcome-title {
+    font-size: 1.4rem;
+  }
+
+  .welcome-subtitle {
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-brand-title {
+    display: none;
+  }
+  
+  .auth-modal-card {
+    padding: 1.25rem 1rem;
+    max-width: 95%;
+  }
+
+  .auth-otp-box {
+    width: 36px;
+    height: 44px;
+    font-size: 1.15rem;
   }
 }
 
