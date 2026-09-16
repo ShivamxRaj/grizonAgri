@@ -1,0 +1,43 @@
+version: "3.9"
+
+services:
+  # PostgreSQL 16 with pgvector extension for vector embeddings
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: grizon_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: grizon
+      POSTGRES_PASSWORD: grizon_agri_2026
+      POSTGRES_DB: grizon_agri
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/app/db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grizon -d grizon_agri"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis 7 for mandi/weather API caching and session management
+  redis:
+    image: redis:7-alpine
+    container_name: grizon_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local

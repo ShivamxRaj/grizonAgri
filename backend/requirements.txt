@@ -1,0 +1,48 @@
+# Grizon Agri Backend Dependencies
+# FastAPI + Async
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+python-multipart==0.0.20
+httpx==0.28.1
+
+# Database
+asyncpg==0.30.0
+psycopg[binary]==3.2.4
+sqlalchemy[asyncio]==2.0.36
+pgvector==0.3.6
+alembic==1.14.1
+
+# Redis
+redis==5.2.1
+
+# LangChain + LangGraph (Agent Orchestration)
+langchain==0.3.14
+langchain-community==0.3.14
+langchain-groq==0.2.4
+langgraph==0.2.60
+
+# Embeddings & Reranking
+sentence-transformers==3.3.1
+
+# Voice (Sarvam AI)
+sarvamai==0.1.9
+
+# RAG Document Processing
+pypdf==5.1.0
+
+# Logging & Observability
+structlog==24.4.0
+prometheus-client==0.21.1
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.25.0
+
+# Utilities
+python-dotenv==1.0.1
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+aiosqlite==0.20.0
+
