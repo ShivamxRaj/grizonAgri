@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { X, Phone, ShieldCheck, User, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react'
+import { X, ShieldCheck, User, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import GrizonAgriLogo from '../components/GrizonAgriLogo'
 
 export default function AuthModal() {
   const { isAuthModalOpen, closeAuthModal, requestOTP, verifyOTP, saveProfile } = useAuth()
@@ -132,8 +133,8 @@ export default function AuthModal() {
         {step === 1 && (
           <form onSubmit={handlePhoneSubmit} className="auth-step-body">
             <div className="auth-icon-header">
-              <div className="auth-icon-badge">
-                <Phone size={24} />
+              <div className="auth-icon-badge logo-grizon-badge">
+                <GrizonAgriLogo size={36} />
               </div>
               <h2>Welcome to Grizon Agri</h2>
               <p>Enter mobile number to log in</p>
