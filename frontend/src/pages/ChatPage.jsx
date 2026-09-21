@@ -299,6 +299,22 @@ export default function ChatPage() {
           'Government MSP rates guaranteed'
         ]
         dosageVal = lang === 'pa' ? 'ਲੁਧਿਆਣਾ ਮੰਡੀ (Ludhiana APMC)' : lang === 'hi' ? 'लुधियाना मंडी (Ludhiana APMC)' : 'Ludhiana APMC Market'
+      } else if (lower.includes('weather') || lower.includes('mausam') || lower.includes('rain') || lower.includes('spray') || lower.includes('ਮੌਸਮ') || lower.includes('ਮੀਂਹ') || lower.includes('मौसम') || lower.includes('बारिश')) {
+        title = lang === 'pa' ? 'ਮੌਸਮ ਅਤੇ ਛਿੜਕਾਅ ਸਲਾਹ' : lang === 'hi' ? 'मौसम एवं छिड़काव सलाह' : 'WEATHER & SPRAY WINDOW'
+        bullets = lang === 'pa' ? [
+          'ਅੱਜ ਮੌਸਮ ਸਾਫ਼ ਹੈ, ਤਾਪਮਾਨ 33°C ਹੈ ਅਤੇ ਹਵਾ ਦੀ ਗਤੀ 4.9 km/h ਹੈ',
+          'ਸਪਰੇਅ ਕਰਨ ਲਈ ਅੱਜ ਦਾ ਦਿਨ ਪੂਰੀ ਤਰ੍ਹਾਂ ਸੁਰੱਖਿਅਤ (SAFE) ਹੈ',
+          'ਸਵੇਰੇ 11 ਵਜੇ ਤੋਂ ਪਹਿਲਾਂ ਛਿੜਕਾਅ ਪੂਰਾ ਕਰੋ'
+        ] : lang === 'hi' ? [
+          'आज मौसम साफ़ है, तापमान 33°C है और हवा की गति 4.9 km/h है',
+          'स्प्रे करने के लिए आज का दिन पूरी तरह सुरक्षित (SAFE) है',
+          'सुबह 11 बजे से पहले छिड़काव पूरा करें'
+        ] : [
+          'Today weather is Clear (33°C) with wind speed of 4.9 km/h and 38% humidity',
+          'Chemical Spray Status: SAFE (Optimal conditions)',
+          'Complete spraying before 11:00 AM for maximum absorption'
+        ]
+        dosageVal = lang === 'pa' ? 'ਸਵੇਰੇ 11 ਵਜੇ ਤੋਂ ਪਹਿਲਾਂ' : lang === 'hi' ? 'सुबह 11 बजे से पहले' : 'Before 11:00 AM'
       } else {
         title = lang === 'pa' ? 'ਖੇਤੀ ਸਲਾਹ' : lang === 'hi' ? 'कृषि सलाह' : 'FARM ADVISORY'
         bullets = lang === 'pa' ? [

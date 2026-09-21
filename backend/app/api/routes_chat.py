@@ -153,7 +153,14 @@ async def chat_query(request: ChatRequest):
 
     # Step 3: Generate response draft based on intent & language
     lang_code = request.language.split("-")[0].lower() if request.language else "pa"
-    raw_rec, card_data = _generate_advisory_response(request.query, intent, lang_code, rag_result, farmer_name=request.farmer_name)
+    raw_rec, card_data = await _generate_advisory_response(
+        query=request.query, 
+        intent=intent, 
+        lang=lang_code, 
+        rag_result=rag_result, 
+        farmer_name=request.farmer_name,
+        district=request.district
+    )
     state["raw_recommendation"] = raw_rec
 
     # Step 4: Run Safety Verification Guardrail
@@ -198,7 +205,38 @@ async def get_chat_history(farmer_id: str, limit: int = 20):
     }
 
 
-def _generate_advisory_response(query: str, intent: str, lang: str, rag_result: dict = None, farmer_name: Optional[str] = None) -> tuple[str, StructuredCard]:
+def extract_district_from_query(query: str, default: str = "Ludhiana") -> str:
+    """Extract Indian district/city from user query prompt."""
+    import re
+    q = query.strip()
+    known_districts = [
+        "Khanna", "Ludhiana", "Amritsar", "Jalandhar", "Patiala", "Bathinda", "Mohali", 
+        "Chandigarh", "Hoshiarpur", "Gurdaspur", "Firozpur", "Sangrur", "Mansa", 
+        "Barnala", "Faridkot", "Muktsar", "Moga", "Kapurthala", "Tarn Taran", "Pathankot", 
+        "Fazilka", "Ambala", "Hisar", "Karnal", "Rohtak", "Panipat", "Kurukshetra", 
+        "Sonipat", "Gurgaon", "Delhi"
+    ]
+    for dist in known_districts:
+        if dist.lower() in q.lower():
+            return dist
+
+    match = re.search(r'\bin\s+([a-zA-Z]+)', q, re.IGNORECASE)
+    if match:
+        extracted = match.group(1).capitalize()
+        if len(extracted) > 2 and extracted.lower() not in ["the", "today", "punjab", "haryana", "india", "my", "our"]:
+            return extracted
+
+    return default or "Ludhiana"
+
+
+async def _generate_advisory_response(
+    query: str, 
+    intent: str, 
+    lang: str, 
+    rag_result: dict = None, 
+    farmer_name: Optional[str] = None,
+    district: Optional[str] = "Ludhiana"
+) -> tuple[str, StructuredCard]:
     """Generates precise advisory recommendation and visual response card based on intent."""
 
     q_lower = query.lower().strip()
@@ -328,34 +366,42 @@ def _generate_advisory_response(query: str, intent: str, lang: str, rag_result: 
 
         return bullets[0] + ". " + bullets[1], StructuredCard(severity="high", title=title, bullets=bullets, dosage=dosage)
 
-    # 3. Weather Forecast & Spray Window Intent
+    # 3. Weather Forecast & Spray Window Intent (Dynamic Live Weather Fetching)
     elif intent == "WEATHER" or any(k in q_lower for k in ["weather", "rain", "forecast", "spray", "ਮੀਂਹ", "ਮੌਸਮ", "मौसम", "बारिश"]):
-        if lang == "pa":
-            title = "ਮੌਸਮ ਅਤੇ ਛਿੜਕਾਅ ਸਲਾਹ"
-            bullets = [
-                "ਅੱਜ ਮੌਸਮ ਸਾਫ਼ ਹੈ, ਹਵਾ ਦੀ ਗਤੀ 12 km/h ਹੈ",
-                "ਸਪਰੇਅ ਕਰਨ ਲਈ ਅੱਜ ਦਾ ਦਿਨ ਪੂਰੀ ਤਰ੍ਹਾਂ ਸੁਰੱਖਿਅਤ (SAFE) ਹੈ",
-                "ਪਰਸੋਂ ਮੀਂਹ ਪੈਣ ਦੀ ਸੰਭਾਵਨਾ ਹੈ, ਅੱਜ ਹੀ ਛਿੜਕਾਅ ਪੂਰਾ ਕਰੋ"
-            ]
-            dosage = "ਸਵੇਰੇ 11 ਵਜੇ ਤੋਂ ਪਹਿਲਾਂ"
-        elif lang == "hi":
-            title = "मौसम एवं छिड़काव सलाह"
-            bullets = [
-                "आज मौसम साफ़ है, हवा की गति 12 km/h है",
-                "स्प्रे करने के लिए आज का दिन पूरी तरह सुरक्षित (SAFE) है",
-                "परसों बारिश की संभावना है, आज ही छिड़काव पूरा करें"
-            ]
-            dosage = "सुबह 11 बजे से पहले"
-        else:
-            title = "WEATHER & SPRAY WINDOW ADVISORY"
-            bullets = [
-                "Today weather is sunny with 12 km/h wind speed",
-                "Conditions are 100% SAFE for chemical spraying",
-                "Rain expected on Day 3, complete spraying today"
-            ]
-            dosage = "Before 11:00 AM"
+        from app.api.routes_weather import fetch_weather_forecast
 
-        return bullets[0], StructuredCard(severity="info", title=title, bullets=bullets, dosage=dosage)
+        target_dist = extract_district_from_query(query, default=district or "Ludhiana")
+        weather_res = await fetch_weather_forecast(district=target_dist, language=lang)
+
+        status_flag = weather_res.today_status.lower() # 'safe', 'caution', 'avoid'
+        severity_val = "high" if status_flag == "avoid" else ("medium" if status_flag == "caution" else "info")
+
+        if lang == "pa":
+            title = f"ਮੌਸਮ ਅਤੇ ਛਿੜਕਾਅ ਸਲਾਹ — {target_dist}"
+            bullet_1 = f"{target_dist} ਵਿੱਚ ਅੱਜ ਮੌਸਮ {weather_res.today_condition} ({weather_res.today_temp}°C) ਹੈ, ਹਵਾ {weather_res.today_wind_speed} km/h ਹੈ ਅਤੇ ਸਲਾਭਤਾ {weather_res.today_humidity}% ਹੈ।"
+            bullet_2 = "ਮੀਂਹ/ਤੇਜ਼ ਹਵਾ ਦੀ ਸੰਭਾਵਨਾ ਕਾਰਨ ਛਿੜਕਾਅ ਨਾ ਕਰੋ!" if status_flag == "avoid" else (
+                "ਹਵਾ ਤੇਜ਼ ਹੈ, ਸਾਵਧਾਨੀ ਨਾਲ ਛਿੜਕਾਅ ਕਰੋ" if status_flag == "caution" else "ਸਪਰੇਅ ਕਰਨ ਲਈ ਅੱਜ ਦਾ ਦਿਨ ਪੂਰੀ ਤਰ੍ਹਾਂ ਸੁਰੱਖਿਅਤ (SAFE) ਹੈ।"
+            )
+            bullet_3 = weather_res.today_advisory
+            dosage = "ਮੀਂਹ ਦੀ ਚੇਤਾਵਨੀ" if status_flag == "avoid" else "ਸਵੇਰੇ 11 ਵਜੇ ਤੋਂ ਪਹਿਲਾਂ"
+        elif lang == "hi":
+            title = f"मौसम एवं छिड़काव सलाह — {target_dist}"
+            bullet_1 = f"{target_dist} में आज मौसम {weather_res.today_condition} ({weather_res.today_temp}°C) है, हवा {weather_res.today_wind_speed} km/h है और आर्द्रता {weather_res.today_humidity}% है।"
+            bullet_2 = "बारिश/तेज़ हवा के कारण छिड़काव न करें!" if status_flag == "avoid" else (
+                "हवा तेज़ है, सावधानी से छिड़काव करें" if status_flag == "caution" else "स्प्रे करने के लिए आज का दिन पूरी तरह सुरक्षित (SAFE) है।"
+            )
+            bullet_3 = weather_res.today_advisory
+            dosage = "बारिश चेतावनी" if status_flag == "avoid" else "सुबह 11 बजे से पहले"
+        else:
+            title = f"WEATHER & SPRAY WINDOW — {target_dist.upper()}"
+            bullet_1 = f"Today weather in {target_dist} is {weather_res.today_condition} ({weather_res.today_temp}°C) with wind speed of {weather_res.today_wind_speed} km/h and {weather_res.today_humidity}% humidity."
+            bullet_2 = f"Chemical Spray Status: {weather_res.today_status}."
+            bullet_3 = weather_res.today_advisory
+            dosage = "Avoid Spray Today" if status_flag == "avoid" else "Optimal Window: Before 11:00 AM"
+
+        bullets = [bullet_1, bullet_2, bullet_3]
+        card = StructuredCard(severity=severity_val, title=title, bullets=bullets, dosage=dosage)
+        return bullet_1 + " " + bullet_2, card
 
     # 4. Government Scheme Intent
     elif intent == "SCHEME" or any(k in q_lower for k in ["scheme", "pm", "kisan", "subsidy", "योजना", "ਸਕੀਮ"]):

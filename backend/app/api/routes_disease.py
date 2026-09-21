@@ -145,7 +145,7 @@ async def scan_disease(
                 "Content-Type": "application/json"
             }
             payload = {
-                "model": "qwen/qwen3.6-27b",
+                "model": "qwen/qwen3.8-27b",
                 "max_tokens": 800,
                 "temperature": 0.1,
                 "messages": [

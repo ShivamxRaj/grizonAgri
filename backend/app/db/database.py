@@ -75,6 +75,11 @@ async def init_db():
                 );
             """))
 
+            try:
+                await conn.execute(text("ALTER TABLE messages ADD COLUMN farmer_id TEXT;"))
+            except Exception:
+                pass
+
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS messages (
                     message_id TEXT PRIMARY KEY,

@@ -1,14 +1,24 @@
 import React from 'react'
-import { Sun, CloudRain, CloudSun, Wind, Droplets, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { Sun, CloudRain, CloudSun, Wind, Droplets, CheckCircle2, AlertTriangle, MapPin, Search } from 'lucide-react'
 import { useLang } from '../i18n/LangProvider'
 
 export default function WeatherPage() {
   const { t, lang } = useLang()
 
+  const [selectedDistrict, setSelectedDistrict] = React.useState('Khanna')
   const [apiWeather, setApiWeather] = React.useState(null)
+  const [isLoading, setIsLoading] = React.useState(false)
+
+  const districtOptions = [
+    'Khanna', 'Ludhiana', 'Amritsar', 'Jalandhar', 'Patiala', 'Bathinda', 
+    'Mohali', 'Chandigarh', 'Hoshiarpur', 'Gurdaspur', 'Firozpur', 'Sangrur', 
+    'Mansa', 'Barnala', 'Faridkot', 'Muktsar', 'Moga', 'Kapurthala', 'Tarn Taran', 
+    'Pathankot', 'Fazilka', 'Karnal', 'Hisar', 'Ambala', 'Delhi'
+  ]
 
   React.useEffect(() => {
-    fetch(`/api/v1/weather/forecast?district=Ludhiana&language=${lang === 'pa' ? 'pa-IN' : lang === 'hi' ? 'hi-IN' : 'en-IN'}`)
+    setIsLoading(true)
+    fetch(`/api/v1/weather/forecast?district=${encodeURIComponent(selectedDistrict)}&language=${lang === 'pa' ? 'pa-IN' : lang === 'hi' ? 'hi-IN' : 'en-IN'}`)
       .then(res => res.json())
       .then(data => {
         if (data && data.forecast) {
@@ -16,7 +26,8 @@ export default function WeatherPage() {
         }
       })
       .catch(() => {})
-  }, [lang])
+      .finally(() => setIsLoading(false))
+  }, [selectedDistrict, lang])
 
   const weatherDataPerLang = {
     pa: [
@@ -53,14 +64,43 @@ export default function WeatherPage() {
     sprayText: f.spray_text
   })) : (weatherDataPerLang[lang] || weatherDataPerLang.en)
 
+  const isTodayAvoid = apiWeather?.today_status === 'AVOID'
+  const isTodayCaution = apiWeather?.today_status === 'CAUTION'
 
   return (
     <div className="page-container">
-      <div style={{ marginBottom: '1.25rem' }}>
-        <h1 className="page-header-title">{t('weather_forecast') || 'Weather & Spray Advisory'}</h1>
-        <p className="page-header-sub">
-          {lang === 'pa' ? 'ਲੁਧਿਆਣਾ, ਪੰਜਾਬ • ਖੇਤੀਬਾੜੀ ਮੌਸਮ ਵਿਭਾਗ' : lang === 'hi' ? 'लुधियाना, पंजाब • कृषि मौसम स्टेशन' : 'Ludhiana, Punjab • Agricultural Meteorological Station'}
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
+        <div>
+          <h1 className="page-header-title">{t('weather_forecast') || 'Weather & Spray Advisory'}</h1>
+          <p className="page-header-sub">
+            <MapPin size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: '-2px' }} />
+            {apiWeather?.district || selectedDistrict}, {apiWeather?.state || 'Punjab'} • {lang === 'pa' ? 'ਖੇਤੀਬਾੜੀ ਮੌਸਮ ਵਿਭਾਗ (Live OWM)' : lang === 'hi' ? 'कृषि मौसम स्टेशन (Live OWM)' : 'Agricultural Meteorological Station (Live OWM)'}
+          </p>
+        </div>
+
+        {/* District Selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'var(--card-bg)', padding: '0.4rem 0.85rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)' }}>
+          <Search size={16} style={{ color: 'var(--text-muted)' }} />
+          <select
+            value={selectedDistrict}
+            onChange={(e) => setSelectedDistrict(e.target.value)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-primary)',
+              fontSize: '0.9rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              outline: 'none'
+            }}
+          >
+            {districtOptions.map((dist) => (
+              <option key={dist} value={dist} style={{ backgroundColor: '#1e293b', color: '#fff' }}>
+                {dist}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Spray Window Banner */}
@@ -70,29 +110,29 @@ export default function WeatherPage() {
         gap: '1rem',
         padding: '1.25rem',
         borderRadius: 'var(--radius-xl)',
-        backgroundColor: 'var(--accent-agri-bg)',
-        border: '1px solid rgba(16, 185, 129, 0.3)',
+        backgroundColor: isTodayAvoid ? 'var(--accent-danger-bg)' : isTodayCaution ? 'rgba(245, 158, 11, 0.15)' : 'var(--accent-agri-bg)',
+        border: `1px solid ${isTodayAvoid ? 'rgba(239, 68, 68, 0.3)' : isTodayCaution ? 'rgba(245, 158, 11, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`,
         marginBottom: '1.5rem'
       }}>
         <div style={{
           width: '44px',
           height: '44px',
           borderRadius: 'var(--radius-md)',
-          backgroundColor: 'var(--accent-agri)',
+          backgroundColor: isTodayAvoid ? 'var(--accent-danger)' : isTodayCaution ? '#f59e0b' : 'var(--accent-agri)',
           color: '#fff',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0
         }}>
-          <CheckCircle2 size={24} />
+          {isTodayAvoid ? <AlertTriangle size={24} /> : <CheckCircle2 size={24} />}
         </div>
         <div>
-          <h2 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent-agri)', marginBottom: '0.2rem' }}>
-            {lang === 'pa' ? 'ਅੱਜ ਫਸਲ ਤੇ ਛਿੜਕਾਅ ਦੀ ਸਲਾਹ: ਸੁਰੱਖਿਅਤ (SAFE)' : lang === 'hi' ? 'आज फसल पर छिड़काव की सलाह: सुरक्षित (SAFE)' : "Today's Spray Conditions: IDEAL / SAFE"}
+          <h2 style={{ fontSize: '1.1rem', fontWeight: 700, color: isTodayAvoid ? 'var(--accent-danger)' : isTodayCaution ? '#f59e0b' : 'var(--accent-agri)', marginBottom: '0.2rem' }}>
+            {apiWeather?.today_status ? `${apiWeather.district}: Today Spray Status: ${apiWeather.today_status}` : (lang === 'pa' ? 'ਅੱਜ ਫਸਲ ਤੇ ਛਿੜਕਾਅ ਦੀ ਸਲਾਹ' : 'Today Spray Conditions')}
           </h2>
           <p style={{ fontSize: '0.88rem', color: 'var(--text-primary)', lineHeight: 1.4 }}>
-            {lang === 'pa' ? 'ਹਵਾ ਦੀ ਗਤੀ 12 km/h ਹੈ ਅਤੇ ਮੀਂਹ ਦੀ ਕੋਈ ਸੰਭਾਵਨਾ ਨਹੀਂ। ਸਵੇਰੇ 11 ਵਜੇ ਤੋਂ ਪਹਿਲਾਂ ਛਿੜਕਾਅ ਪੂਰਾ ਕਰੋ।' : lang === 'hi' ? 'हवा की गति 12 km/h है और बारिश की संभावना नहीं है। सुबह 11 बजे से पहले छिड़काव पूरा करें।' : 'Wind speed is optimal at 12 km/h with 0% rain probability. Complete spraying before 11:00 AM for maximum absorption.'}
+            {apiWeather?.today_advisory || (lang === 'pa' ? 'ਮੌਸਮ ਡਾਟਾ ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ...' : 'Loading weather forecast...')}
           </p>
         </div>
       </div>
@@ -148,3 +188,4 @@ export default function WeatherPage() {
     </div>
   )
 }
+

@@ -31,6 +31,7 @@ sarvamai==0.1.9
 
 # RAG Document Processing
 pypdf==5.1.0
+beautifulsoup4==4.12.3
 
 # Logging & Observability
 structlog==24.4.0

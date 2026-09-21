@@ -55,7 +55,7 @@ async def route_intent(state: FarmState) -> FarmState:
     try:
         llm = ChatGroq(
             api_key=settings.GROQ_API_KEY,
-            model_name="qwen/qwen3.6-27b",
+            model_name="qwen/qwen3.8-27b",
             temperature=0,
             max_tokens=15,
         )
