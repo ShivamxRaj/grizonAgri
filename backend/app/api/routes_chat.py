@@ -206,27 +206,40 @@ async def get_chat_history(farmer_id: str, limit: int = 20):
 
 
 def extract_district_from_query(query: str, default: str = "Ludhiana") -> str:
-    """Extract Indian district/city from user query prompt."""
+    """Extract Indian district/city from user query prompt with fuzzy typo resolution."""
     import re
+    import difflib
+
     q = query.strip()
     known_districts = [
-        "Khanna", "Ludhiana", "Amritsar", "Jalandhar", "Patiala", "Bathinda", "Mohali", 
+        "Amritsar", "Ludhiana", "Khanna", "Jalandhar", "Patiala", "Bathinda", "Mohali", 
         "Chandigarh", "Hoshiarpur", "Gurdaspur", "Firozpur", "Sangrur", "Mansa", 
         "Barnala", "Faridkot", "Muktsar", "Moga", "Kapurthala", "Tarn Taran", "Pathankot", 
         "Fazilka", "Ambala", "Hisar", "Karnal", "Rohtak", "Panipat", "Kurukshetra", 
-        "Sonipat", "Gurgaon", "Delhi"
+        "Sonipat", "Gurgaon", "Delhi", "Mumbai", "Kolkata", "Chennai", "Bangalore", "Hyderabad",
+        "Shimla", "Dehradun", "Lucknow", "Jaipur", "Patna", "Ranchi", "Bhopal", "Indore"
     ]
+    ignored_words = {
+        "weather", "current", "currrent", "temp", "temperature", "forecast", "in", "at", 
+        "today", "now", "spray", "for", "is", "the", "kaisa", "hai", "mausam", "barish", 
+        "batao", "dasso", "da", "bata", "check", "kro", "mandi", "rate"
+    }
+
+    # 1. Check exact match
     for dist in known_districts:
         if dist.lower() in q.lower():
             return dist
 
-    match = re.search(r'\bin\s+([a-zA-Z]+)', q, re.IGNORECASE)
-    if match:
-        extracted = match.group(1).capitalize()
-        if len(extracted) > 2 and extracted.lower() not in ["the", "today", "punjab", "haryana", "india", "my", "our"]:
-            return extracted
+    # 2. Extract potential city word and fuzzy match against known districts
+    words = [w for w in re.findall(r'[a-zA-Z]+', q) if w.lower() not in ignored_words and len(w) >= 3]
+    for word in words:
+        matches = difflib.get_close_matches(word.capitalize(), known_districts, n=1, cutoff=0.55)
+        if matches:
+            return matches[0]
+        return word.capitalize()
 
     return default or "Ludhiana"
+
 
 
 async def _generate_advisory_response(
