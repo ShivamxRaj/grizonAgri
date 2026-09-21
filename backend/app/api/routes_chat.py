@@ -11,6 +11,7 @@ from app.agents.router import route_intent
 from app.agents.verification import verify_recommendation
 from app.agents.state import FarmState
 from app.db.database import save_chat_message
+from app.core.config import settings
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -242,6 +243,55 @@ def extract_district_from_query(query: str, default: str = "Ludhiana") -> str:
 
 
 
+async def generate_groq_llm_response(
+    query: str,
+    intent: str,
+    lang: str,
+    card_data: StructuredCard,
+    farmer_name: Optional[str] = None
+) -> str:
+    """Uses Groq LLM (Qwen 27B) to generate dynamic, calm, polite, and pleasant natural language advisory."""
+    if not settings.GROQ_API_KEY or settings.GROQ_API_KEY == "your_groq_api_key_here":
+        return " ".join(card_data.bullets[:2]) if card_data.bullets else "Advisory details provided."
+
+    try:
+        from langchain_groq import ChatGroq
+        llm = ChatGroq(
+            api_key=settings.GROQ_API_KEY,
+            model_name="qwen/qwen3.8-27b",
+            temperature=0.3,
+            max_tokens=300
+        )
+        
+        display_name = (farmer_name or "").strip().split()[0] if farmer_name else "Farmer"
+        card_context = f"Title: {card_data.title}\nDetails: " + " | ".join(card_data.bullets) + (f"\nDosage/Window: {card_data.dosage}" if card_data.dosage else "")
+
+        system_prompt = f"""You are Grizon Agri AI, an exceptionally calm, polite, respectful, warm, and pleasant agricultural assistant for Indian farmers.
+Always address the farmer with warm respect (e.g. Sat Sri Akal / Namaste / Hello {display_name} Ji).
+Provide a concise, supportive, empathetic, and crystal-clear response using the following verified live data:
+
+[VERIFIED LIVE CONTEXT]
+{card_context}
+
+Format guidelines:
+- Keep the tone calm, encouraging, practical, and highly respectful.
+- Respond in language code '{lang}' (e.g. Punjabi if 'pa', Hindi if 'hi', English/Hinglish if 'en').
+- Keep response clear, well-structured, and helpful for farm decisions.
+"""
+        res = await llm.ainvoke([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": query}
+        ])
+
+        if res and res.content.strip():
+            return res.content.strip()
+
+    except Exception as e:
+        logger.warning("groq_llm_response_fallback", error=str(e))
+
+    return " ".join(card_data.bullets[:2])
+
+
 async def _generate_advisory_response(
     query: str, 
     intent: str, 
@@ -348,7 +398,9 @@ async def _generate_advisory_response(
                 ]
                 dosage = "Ludhiana APMC Market"
 
-        return bullets[0], StructuredCard(severity="medium", title=title, bullets=bullets, dosage=dosage)
+        card = StructuredCard(severity="medium", title=title, bullets=bullets, dosage=dosage)
+        text = await generate_groq_llm_response(query, intent, lang, card, farmer_name)
+        return text, card
 
     # 2. Disease Diagnosis Intent
     elif intent == "DISEASE" or any(k in q_lower for k in ["disease", "pest", "yellow", "spots", "rust", "fungus", "ਤੇਲਾ", "ਕੁੰਗੀ", "ਰੋਗ", "ਰਤੂਆ", "रतुआ", "कीड़ा"]):
@@ -377,7 +429,9 @@ async def _generate_advisory_response(
             ]
             dosage = "2.5 Pumps / Acre"
 
-        return bullets[0] + ". " + bullets[1], StructuredCard(severity="high", title=title, bullets=bullets, dosage=dosage)
+        card = StructuredCard(severity="high", title=title, bullets=bullets, dosage=dosage)
+        text = await generate_groq_llm_response(query, intent, lang, card, farmer_name)
+        return text, card
 
     # 3. Weather Forecast & Spray Window Intent (Dynamic Live Weather Fetching)
     elif intent == "WEATHER" or any(k in q_lower for k in ["weather", "rain", "forecast", "spray", "ਮੀਂਹ", "ਮੌਸਮ", "मौसम", "बारिश"]):
@@ -414,7 +468,8 @@ async def _generate_advisory_response(
 
         bullets = [bullet_1, bullet_2, bullet_3]
         card = StructuredCard(severity=severity_val, title=title, bullets=bullets, dosage=dosage)
-        return bullet_1 + " " + bullet_2, card
+        text = await generate_groq_llm_response(query, intent, lang, card, farmer_name)
+        return text, card
 
     # 4. Government Scheme Intent
     elif intent == "SCHEME" or any(k in q_lower for k in ["scheme", "pm", "kisan", "subsidy", "योजना", "ਸਕੀਮ"]):
