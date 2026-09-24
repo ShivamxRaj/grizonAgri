@@ -33,8 +33,6 @@ class WeatherResponse(BaseModel):
     today_wind_speed: Optional[float] = 12.0
     today_condition: Optional[str] = "Clear"
     forecast: list[WeatherDayForecast]
-
-
 async def fetch_weather_forecast(
     district: str = "Ludhiana",
     state: str = "Punjab",
@@ -45,20 +43,24 @@ async def fetch_weather_forecast(
     Uses multi-tier live providers (OWM India -> OWM Global -> Open-Meteo Live API).
     Guarantees 100% real-time data for any location.
     """
-    logger.info("fetch_weather_forecast", district=district, language=language)
+    from urllib.parse import quote
+
+    logger.info("fetch_weather_forecast", district=district, state=state, language=language)
     lang_code = language.split("-")[0].lower() if language else "pa"
     target_district = district.strip().title() if district else "Ludhiana"
+    target_state = state.strip().title() if state else None
 
-    # Tier 1 & 2: OpenWeatherMap (India format then Global format)
+    # Tier 1 & 2: OpenWeatherMap (India format with state then Global format)
     if settings.OWM_API_KEY and settings.OWM_API_KEY != "your_openweathermap_api_key_here":
+        q_with_state = f"{target_district},{target_state},IN" if target_state else f"{target_district},IN"
         owm_urls = [
             (
-                f"https://api.openweathermap.org/data/2.5/weather?q={target_district},IN&appid={settings.OWM_API_KEY}&units=metric",
-                f"https://api.openweathermap.org/data/2.5/forecast?q={target_district},IN&appid={settings.OWM_API_KEY}&units=metric"
+                f"https://api.openweathermap.org/data/2.5/weather?q={quote(q_with_state)}&appid={settings.OWM_API_KEY}&units=metric",
+                f"https://api.openweathermap.org/data/2.5/forecast?q={quote(q_with_state)}&appid={settings.OWM_API_KEY}&units=metric"
             ),
             (
-                f"https://api.openweathermap.org/data/2.5/weather?q={target_district}&appid={settings.OWM_API_KEY}&units=metric",
-                f"https://api.openweathermap.org/data/2.5/forecast?q={target_district}&appid={settings.OWM_API_KEY}&units=metric"
+                f"https://api.openweathermap.org/data/2.5/weather?q={quote(target_district)}&appid={settings.OWM_API_KEY}&units=metric",
+                f"https://api.openweathermap.org/data/2.5/forecast?q={quote(target_district)}&appid={settings.OWM_API_KEY}&units=metric"
             )
         ]
 
@@ -69,6 +71,9 @@ async def fetch_weather_forecast(
                     if res_curr.status_code == 200:
                         curr_data = res_curr.json()
                         resolved_name = curr_data.get("name", target_district)
+                        if target_state and target_state.lower() not in resolved_name.lower():
+                            resolved_name = f"{resolved_name}, {target_state}"
+
                         temp_curr = round(curr_data["main"]["temp"])
                         humidity_curr = curr_data["main"]["humidity"]
                         wind_curr = round(curr_data["wind"]["speed"] * 3.6, 1)
@@ -160,7 +165,7 @@ async def fetch_weather_forecast(
 
                         return WeatherResponse(
                             district=resolved_name,
-                            state=state,
+                            state=target_state or "India",
                             today_status=spray_status_today.upper(),
                             today_advisory=advisory,
                             today_temp=temp_curr,
@@ -174,14 +179,23 @@ async def fetch_weather_forecast(
 
     # Tier 3: Open-Meteo Free Live Meteorological API (No Key Required, Geocoding Supported)
     try:
-        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={target_district}&count=1"
+        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={quote(target_district)}&count=10"
         async with httpx.AsyncClient(timeout=5.0) as client:
             geo_res = await client.get(geo_url)
             if geo_res.status_code == 200 and geo_res.json().get("results"):
-                item = geo_res.json()["results"][0]
-                lat, lon = item["latitude"], item["longitude"]
-                resolved_name = item.get("name", target_district)
-                country_name = item.get("country", "India")
+                results = geo_res.json()["results"]
+                best_item = None
+                if target_state:
+                    for r in results:
+                        if target_state.lower() in r.get("admin1", "").lower():
+                            best_item = r
+                            break
+                if not best_item:
+                    best_item = results[0]
+
+                lat, lon = best_item["latitude"], best_item["longitude"]
+                resolved_name = best_item.get("name", target_district)
+                country_name = best_item.get("admin1", best_item.get("country", "India"))
 
                 w_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,precipitation&daily=weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max,relative_humidity_2m_mean&timezone=auto"
                 w_res = await client.get(w_url)
@@ -244,15 +258,16 @@ async def fetch_weather_forecast(
                             )
                         )
 
+                    full_display_name = f"{resolved_name}, {country_name}"
                     if lang_code == "pa":
-                        advisory = f"{resolved_name} ਵਿੱਚ ਤਾਪਮਾਨ {temp_curr}°C ਹੈ, ਹਵਾ {wind_curr} km/h ਹੈ ਅਤੇ ਸਲਾਭਤਾ {humidity_curr}% ਹੈ।"
+                        advisory = f"{full_display_name} ਵਿੱਚ ਤਾਪਮਾਨ {temp_curr}°C ਹੈ, ਹਵਾ {wind_curr} km/h ਹੈ ਅਤੇ ਸਲਾਭਤਾ {humidity_curr}% ਹੈ।"
                     elif lang_code == "hi":
-                        advisory = f"{resolved_name} में तापमान {temp_curr}°C है, हवा {wind_curr} km/h है और आर्द्रता {humidity_curr}% है।"
+                        advisory = f"{full_display_name} में तापमान {temp_curr}°C है, हवा {wind_curr} km/h है और आर्द्रता {humidity_curr}% है।"
                     else:
-                        advisory = f"Current temperature in {resolved_name} is {temp_curr}°C with wind speed of {wind_curr} km/h and {humidity_curr}% humidity."
+                        advisory = f"Current temperature in {full_display_name} is {temp_curr}°C with wind speed of {wind_curr} km/h and {humidity_curr}% humidity."
 
                     return WeatherResponse(
-                        district=resolved_name,
+                        district=full_display_name,
                         state=country_name,
                         today_status=spray_status_today.upper(),
                         today_advisory=advisory,
@@ -268,7 +283,7 @@ async def fetch_weather_forecast(
     # Dynamic fallback calculated from requested district
     return WeatherResponse(
         district=target_district,
-        state=state,
+        state=state or "India",
         today_status="SAFE",
         today_advisory=f"Live weather for {target_district}: Clear sky with optimal wind conditions.",
         today_temp=30,

@@ -3,8 +3,6 @@ Grizon Agri — LangGraph Intent Router
 Classifies farmer queries into specific agricultural task intents.
 """
 import structlog
-import re
-from langchain_groq import ChatGroq
 from app.agents.state import FarmState
 from app.core.config import settings
 
@@ -40,7 +38,7 @@ Examples:
 async def route_intent(state: FarmState) -> FarmState:
     """
     LangGraph Node: Classify farmer query into an agricultural intent.
-    Uses Groq Llama for fast, low-latency classification with keyword fallback.
+    Uses dual-LLM (Groq primary + DeepSeek failover) for fast classification with keyword fallback.
     """
     query = state.get("user_query", "")
     logger.info("routing_intent", query=query[:100])
@@ -48,40 +46,39 @@ async def route_intent(state: FarmState) -> FarmState:
     # First check exact keyword matches for high precision
     keyword_intent = _keyword_fallback(query)
 
-    if not settings.GROQ_API_KEY or settings.GROQ_API_KEY == "your_groq_api_key_here":
+    has_groq = settings.GROQ_API_KEY and settings.GROQ_API_KEY != "your_groq_api_key_here"
+    has_deepseek = bool(settings.DEEPSEEK_API_KEY)
+    if not has_groq and not has_deepseek:
         state["intent"] = keyword_intent
         return state
 
     try:
-        llm = ChatGroq(
-            api_key=settings.GROQ_API_KEY,
-            model_name="qwen/qwen3.8-27b",
+        from app.services.llm import generate_llm_response
+        raw_response = await generate_llm_response(
+            prompt=query,
+            system_prompt=INTENT_SYSTEM_PROMPT,
+            primary_provider="groq",
             temperature=0,
-            max_tokens=15,
+            max_tokens=15
         )
 
-        response = await llm.ainvoke([
-            {"role": "system", "content": INTENT_SYSTEM_PROMPT},
-            {"role": "user", "content": query},
-        ])
+        if raw_response:
+            raw_text = raw_response.strip().upper()
+            valid_intents = ["MANDI", "DISEASE", "WEATHER", "SCHEME", "IRRIGATION", "SOIL", "CROP_ADVISORY", "GREETING", "GENERAL"]
+            detected_intent = "GENERAL"
 
-        raw_text = response.content.strip().upper()
-        
-        # Extract intent label using regex
-        valid_intents = ["MANDI", "DISEASE", "WEATHER", "SCHEME", "IRRIGATION", "SOIL", "CROP_ADVISORY", "GREETING", "GENERAL"]
-        detected_intent = "GENERAL"
-        
-        for v in valid_intents:
-            if v in raw_text:
-                detected_intent = v
-                break
+            for v in valid_intents:
+                if v in raw_text:
+                    detected_intent = v
+                    break
 
-        # If LLM returned GENERAL but keyword detected specific intent, trust keyword
-        if detected_intent == "GENERAL" and keyword_intent != "GENERAL":
-            detected_intent = keyword_intent
+            if detected_intent == "GENERAL" and keyword_intent != "GENERAL":
+                detected_intent = keyword_intent
 
-        logger.info("intent_classified", intent=detected_intent, raw_response=raw_text)
-        state["intent"] = detected_intent
+            logger.info("intent_classified", intent=detected_intent, raw_response=raw_text)
+            state["intent"] = detected_intent
+        else:
+            state["intent"] = keyword_intent
 
     except Exception as e:
         logger.error("intent_classification_error", error=str(e))

@@ -12,13 +12,43 @@ logger = structlog.get_logger()
 
 async def search_agri_web(query: str, max_results: int = 3) -> list[dict]:
     """
-    Search the web for real-time agricultural information, mandi rates, and schemes.
+    Search the web for real-time agricultural information, mandi rates, and schemes using Serper API.
     Returns list of {"title": str, "snippet": str, "source": str}.
     """
+    from app.core.config import settings
     logger.info("crag_web_search_initiated", query=query[:100])
 
+    # 1. Primary: Try Serper Google Search API
+    if settings.SERPER_API_KEY:
+        try:
+            url = "https://google.serper.dev/search"
+            headers = {
+                "X-API-KEY": settings.SERPER_API_KEY,
+                "Content-Type": "application/json"
+            }
+            payload = {"q": f"India agriculture {query}"}
+
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.post(url, headers=headers, json=payload)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    organic = data.get("organic", [])
+                    results = []
+                    for item in organic[:max_results]:
+                        results.append({
+                            "title": item.get("title", ""),
+                            "snippet": item.get("snippet", ""),
+                            "source": f"Serper Search ({item.get('link', 'Google')})"
+                        })
+
+                    if results:
+                        logger.info("serper_web_search_success", count=len(results))
+                        return results
+        except Exception as e:
+            logger.warning("serper_web_search_failed", error=str(e))
+
+    # 2. Secondary: DuckDuckGo Fallback
     try:
-        # Use DuckDuckGo HTML Instant Search endpoint (no API key required)
         encoded_query = urllib.parse.quote(f"India agriculture {query}")
         url = f"https://html.duckduckgo.com/html/?q={encoded_query}"
 

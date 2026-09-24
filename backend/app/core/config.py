@@ -28,6 +28,11 @@ class Settings(BaseSettings):
 
     # --- LLM ---
     GROQ_API_KEY: Optional[str] = None
+    DEEPSEEK_API_KEY: Optional[str] = None
+    DEEPSEEK_MODEL: str = "deepseek-chat"
+
+    # --- Web Search ---
+    SERPER_API_KEY: Optional[str] = None
 
     # --- Satellite ---
     SENTINEL_HUB_CLIENT_ID: Optional[str] = None
