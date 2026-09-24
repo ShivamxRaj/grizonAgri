@@ -207,12 +207,12 @@ async def get_chat_history(farmer_id: str, limit: int = 20):
 
 
 def extract_district_from_query(query: str, default: str = "Ludhiana") -> tuple[str, Optional[str]]:
-    """Extract Indian district/city and optional state from user query prompt with fuzzy typo resolution."""
+    """Extract Indian district/city and optional state from user query prompt safely."""
     import re
     import difflib
 
     clean_q = re.sub(r'[._\-/]+', ' ', query.strip())
-    
+
     known_states = ["Bihar", "Punjab", "Haryana", "Uttar Pradesh", "UP", "Rajasthan", "Madhya Pradesh", "MP", "Maharashtra", "Gujarat", "Delhi"]
     detected_state = None
     for s in known_states:
@@ -228,25 +228,21 @@ def extract_district_from_query(query: str, default: str = "Ludhiana") -> tuple[
         "Gurgaon", "Delhi", "Mumbai", "Kolkata", "Chennai", "Bangalore", "Hyderabad",
         "Shimla", "Dehradun", "Lucknow", "Jaipur", "Patna", "Ranchi", "Bhopal", "Indore", "Sonpur"
     ]
-    ignored_words = {
-        "weather", "current", "currrent", "temp", "temperature", "forecast", "in", "at", 
-        "today", "now", "spray", "for", "is", "the", "kaisa", "hai", "mausam", "barish", 
-        "batao", "dasso", "da", "bata", "check", "kro", "mandi", "rate", "pucha", "pucho", "bataen"
-    }
 
-    # 1. Check exact match
+    # 1. Check exact match in known Indian districts
     for dist in known_districts:
-        if dist.lower() in clean_q.lower():
+        if re.search(r'\b' + re.escape(dist.lower()) + r'\b', clean_q.lower()):
             return dist, detected_state
 
-    # 2. Extract potential city word and fuzzy match
-    words = [w for w in re.findall(r'[a-zA-Z]+', clean_q) if w.lower() not in ignored_words and w.lower() not in [s.lower() for s in known_states] and len(w) >= 3]
-    for word in words:
-        matches = difflib.get_close_matches(word.capitalize(), known_districts, n=1, cutoff=0.75)
+    # 2. Check if query specifies location after preposition ('in', 'at', 'near')
+    prep_match = re.search(r'\b(?:in|at|near|se|main|mein)\s+([a-zA-Z]{3,20})\b', clean_q, re.IGNORECASE)
+    if prep_match:
+        candidate = prep_match.group(1).capitalize()
+        matches = difflib.get_close_matches(candidate, known_districts, n=1, cutoff=0.7)
         if matches:
             return matches[0], detected_state
-        return word.capitalize(), detected_state
 
+    # Fall back safely to default Indian district (e.g. Ludhiana)
     return default or "Ludhiana", detected_state
 
 
@@ -263,6 +259,14 @@ async def generate_groq_llm_response(
     display_name = (farmer_name or "").strip().split()[0] if farmer_name else "Farmer"
     card_context = f"Title: {card_data.title}\nDetails: " + " | ".join(card_data.bullets) + (f"\nDosage/Window: {card_data.dosage}" if card_data.dosage else "")
 
+    lang_instruction = (
+        "Respond strictly in clear, professional English. Do NOT mix Hindi or Hinglish words." if lang == "en" else (
+            "Respond strictly in pure Hindi (हिन्दी). Address the farmer politely." if lang == "hi" else (
+                "Respond strictly in pure Punjabi (ਪੰਜਾਬੀ). Address the farmer with Sat Sri Akal." if lang == "pa" else "Respond in clear English."
+            )
+        )
+    )
+
     system_prompt = f"""You are Grizon Agri AI, an exceptionally calm, polite, respectful, warm, and pleasant agricultural assistant for Indian farmers.
 Always address the farmer with warm respect (e.g. Sat Sri Akal / Namaste / Hello {display_name} Ji).
 Provide a concise, supportive, empathetic, and crystal-clear response using the following verified live data:
@@ -272,8 +276,8 @@ Provide a concise, supportive, empathetic, and crystal-clear response using the 
 
 Format guidelines:
 - Keep the tone calm, encouraging, practical, and highly respectful.
-- Respond in language code '{lang}' (e.g. Punjabi if 'pa', Hindi if 'hi', English/Hinglish if 'en').
-- Keep response clear, well-structured, and helpful for farm decisions.
+- {lang_instruction}
+- Directly answer the farmer's question using the provided context.
 """
     try:
         from app.services.llm import generate_llm_response

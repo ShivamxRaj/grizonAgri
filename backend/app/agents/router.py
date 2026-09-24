@@ -97,7 +97,11 @@ def _keyword_fallback(query: str) -> str:
         "good morning", "good afternoon", "good evening", "good night", "greetings", 
         "ram ram", "ਰਾਮ ਰਾਮ", "राम राम", "pranam", "ਪ੍ਰਣਾਮ", "प्रणाम"
     ]
-    mandi_keywords = ["ਮੰਡੀ", "ਭਾਅ", "ਕੀਮਤ", "ਵੇਚ", "ਮੰਡੀ", "मंडी", "भाव", "दाम", "mandi", "price", "rate", "sell", "apmc", "quintal"]
+    mandi_keywords = [
+        "ਮੰਡੀ", "ਭਾਅ", "ਕੀਮਤ", "ਵੇਚ", "ਮੰਡੀ", "मंडी", "भाव", "दाम", "mandi", "price", "proce", "prce", "prizi", 
+        "rate", "sell", "apmc", "quintal", "market", "cost", "paddy", "wheat", "cotton", "mustard", "basmati", 
+        "ਝੋਨਾ", "ਜੀਰੀ", "धान", "गेहूं"
+    ]
     disease_keywords = ["ਬੀਮਾਰੀ", "ਪੀਲਾ", "ਤੇਲਾ", "ਕੀੜਾ", "ਧੱਬੇ", "ਕੁੰਗੀ", "रोग", "कीड़ा", "रतुआ", "disease", "pest", "yellow", "spots", "insect", "rust", "fungus"]
     weather_keywords = ["ਮੌਸਮ", "ਮੀਂਹ", "ਬਰਸਾਤ", "ਤਾਪਮਾਨ", "ਸਪਰੇਅ", "मौसम", "बारिश", "spray", "weather", "rain", "forecast", "wind"]
     scheme_keywords = ["ਸਕੀਮ", "ਸਬਸਿਡੀ", "PM", "ਕਿਸ਼ਤ", "योजना", "सब्सिडी", "scheme", "subsidy", "kisan", "pmfby"]
