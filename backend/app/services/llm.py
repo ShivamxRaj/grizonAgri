@@ -59,31 +59,41 @@ async def call_groq(
     temperature: float = 0.3,
     max_tokens: int = 400
 ) -> Optional[str]:
-    """Call Groq chat API via LangChain ChatGroq."""
+    """Call Groq chat API directly via HTTP with valid model names."""
     if not settings.GROQ_API_KEY or settings.GROQ_API_KEY == "your_groq_api_key_here":
         return None
 
-    try:
-        from langchain_groq import ChatGroq
+    models_to_try = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {settings.GROQ_API_KEY}"
+    }
 
-        llm = ChatGroq(
-            api_key=settings.GROQ_API_KEY,
-            model_name="qwen/qwen3.8-27b",
-            temperature=temperature,
-            max_tokens=max_tokens
-        )
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
 
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
-
-        response = await llm.ainvoke(messages)
-        if response and response.content.strip():
-            logger.info("groq_llm_success")
-            return response.content.strip()
-    except Exception as e:
-        logger.warning("groq_llm_error", error=str(e))
+    for model in models_to_try:
+        try:
+            payload = {
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens
+            }
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(url, headers=headers, json=payload)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    content = data["choices"][0]["message"]["content"].strip()
+                    logger.info("groq_llm_success", model=model)
+                    return content
+                else:
+                    logger.warning("groq_llm_http_error", model=model, status_code=resp.status_code, body=resp.text[:200])
+        except Exception as e:
+            logger.warning("groq_llm_error", model=model, error=str(e))
 
     return None
 

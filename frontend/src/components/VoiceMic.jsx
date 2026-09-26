@@ -5,11 +5,64 @@ import { useLang } from '../i18n/LangProvider'
 export default function VoiceMic({ onTranscript }) {
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
+  const recognitionRef = useRef(null)
   const mediaRecorderRef = useRef(null)
   const chunksRef = useRef([])
-  const { t, lang } = useLang()
+  const { lang } = useLang()
 
-  const startRecording = async () => {
+  const getLangCode = () => {
+    if (lang === 'pa') return 'pa-IN'
+    if (lang === 'hi') return 'hi-IN'
+    return 'en-IN'
+  }
+
+  const startListening = async () => {
+    // 1. Try Native Web Speech API (Chrome / Edge / Brave / Safari)
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+
+    if (SpeechRecognition) {
+      try {
+        const recognition = new SpeechRecognition()
+        recognition.lang = getLangCode()
+        recognition.continuous = false
+        recognition.interimResults = false
+
+        recognition.onstart = () => {
+          setIsRecording(true)
+        }
+
+        recognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript
+          if (transcript && onTranscript) {
+            onTranscript(transcript)
+          }
+          setIsRecording(false)
+        }
+
+        recognition.onerror = (event) => {
+          console.warn('Speech recognition error:', event.error)
+          setIsRecording(false)
+          // Fallback to MediaRecorder + Sarvam STT if browser speech recognition blocks audio
+          startAudioRecording()
+        }
+
+        recognition.onend = () => {
+          setIsRecording(false)
+        }
+
+        recognitionRef.current = recognition
+        recognition.start()
+        return
+      } catch (e) {
+        console.warn('Speech recognition init error:', e)
+      }
+    }
+
+    // 2. Fallback to MediaRecorder + Backend Sarvam STT
+    startAudioRecording()
+  }
+
+  const startAudioRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const mediaRecorder = new MediaRecorder(stream, {
@@ -32,28 +85,20 @@ export default function VoiceMic({ onTranscript }) {
       mediaRecorder.start()
       setIsRecording(true)
     } catch (err) {
-      console.warn('Microphone access unavailable, using voice simulation fallback:', err)
-      // Voice recording fallback simulation for demonstration
-      setIsRecording(true)
-      setTimeout(() => {
-        setIsRecording(false)
-        const mockVoiceQueries = {
-          pa: 'ਕਣਕ ਤੇ ਪੀਲਾ ਤੇਲਾ ਲੱਗ ਗਿਆ, ਕੀ ਕਰੀਏ?',
-          hi: 'गेहूं पर पीला तेला लग गया, क्या करें?',
-          en: 'My wheat crop has yellow rust, what treatment should I apply?'
-        }
-        if (onTranscript) onTranscript(mockVoiceQueries[lang] || mockVoiceQueries['en'])
-      }, 3000)
+      console.warn('Microphone access denied or unverified:', err)
+      alert('Microphone access was denied or unsupported. Please type your query in the chat box.')
+      setIsRecording(false)
     }
   }
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop()
-      setIsRecording(false)
-    } else {
-      setIsRecording(false)
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop() } catch (e) {}
     }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      try { mediaRecorderRef.current.stop() } catch (e) {}
+    }
+    setIsRecording(false)
   }
 
   const sendAudioToBackend = async (blob) => {
@@ -61,7 +106,7 @@ export default function VoiceMic({ onTranscript }) {
     try {
       const formData = new FormData()
       formData.append('audio', blob, 'recording.webm')
-      formData.append('language', lang === 'pa' ? 'pa-IN' : lang === 'hi' ? 'hi-IN' : 'en-IN')
+      formData.append('language', getLangCode())
 
       const response = await fetch('/api/v1/voice/transcribe', {
         method: 'POST',
@@ -74,16 +119,11 @@ export default function VoiceMic({ onTranscript }) {
           onTranscript(data.transcript)
         }
       } else {
-        throw new Error('STT non-200')
+        throw new Error('STT returned error status')
       }
     } catch (err) {
-      console.warn('Backend STT fallback trigger:', err)
-      const mockVoiceQueries = {
-        pa: 'ਕਣਕ ਤੇ ਪੀਲਾ ਤੇਲਾ ਲੱਗ ਗਿਆ, ਕੀ ਕਰੀਏ?',
-        hi: 'गेहूं पर पीला तेला लग गया, क्या करें?',
-        en: 'My wheat crop has yellow rust, what treatment should I apply?'
-      }
-      if (onTranscript) onTranscript(mockVoiceQueries[lang] || mockVoiceQueries['en'])
+      console.warn('Backend STT failed:', err)
+      alert('Could not transcribe audio. Please type your query directly.')
     } finally {
       setIsProcessing(false)
     }
@@ -91,9 +131,9 @@ export default function VoiceMic({ onTranscript }) {
 
   const handleClick = () => {
     if (isRecording) {
-      stopRecording()
+      stopListening()
     } else {
-      startRecording()
+      startListening()
     }
   }
 
@@ -103,7 +143,7 @@ export default function VoiceMic({ onTranscript }) {
       className={`mic-btn-dock ${isRecording ? 'is-recording' : ''}`}
       onClick={handleClick}
       disabled={isProcessing}
-      title={isRecording ? 'Stop Recording' : 'Voice Input (Sarvam AI)'}
+      title={isRecording ? 'Stop Recording' : 'Voice Input (Say query in Hindi, Punjabi, or English)'}
     >
       {isProcessing ? (
         <Loader2 size={18} className="animate-spin" />

@@ -260,10 +260,20 @@ async def generate_groq_llm_response(
     """Uses dual LLM service (DeepSeek primary + Groq failover) to generate dynamic, accurate natural language advisory."""
     display_name = (farmer_name or "").strip().split()[0] if farmer_name else "Farmer"
 
-    lang_code = (lang or "pa").split("-")[0].lower()
-    if lang_code == "hi":
-        lang_instruction = "Respond in warm, respectful, polite Hindi or Hinglish as appropriate for an Indian farmer. Address the farmer politely."
-    elif lang_code == "pa":
+    # Script & Language auto-detection
+    import re
+    if re.search(r'[\u0A00-\u0A7F]', query):  # Gurmukhi script
+        target_lang = "pa"
+    elif re.search(r'[\u0900-\u097F]', query):  # Devanagari script
+        target_lang = "hi"
+    elif any(w in query.lower() for w in ["kaise", "kya", "kab", "karna", "chahiye", "gehun", "khad", "khet", "bimar", "mausam"]):
+        target_lang = "hi"
+    else:
+        target_lang = (lang or "en").split("-")[0].lower()
+
+    if target_lang == "hi":
+        lang_instruction = "Respond in warm, respectful, polite Hindi or Hinglish matching the farmer's query language. Address the farmer respectfully."
+    elif target_lang == "pa":
         lang_instruction = "Respond in warm, respectful, polite Punjabi (ਪੰਜਾਬੀ). Address the farmer warmly with Sat Sri Akal."
     else:
         lang_instruction = "Respond in warm, polite, crystal-clear English. Address the farmer warmly."
@@ -277,7 +287,7 @@ async def generate_groq_llm_response(
         weather_text = f"\n[LIVE WEATHER CONTEXT]\nLocation: {weather_data.get('district', 'Punjab')}, Temp: {weather_data.get('today_temp', 30)}°C, Condition: {weather_data.get('today_condition', 'Clear')}, Wind: {weather_data.get('today_wind_speed', 10)} km/h, Humidity: {weather_data.get('today_humidity', 50)}%"
 
     system_prompt = f"""You are Grizon Agri AI, an expert, warm, calm, polite, and highly accurate agricultural AI assistant for Indian farmers.
-Always answer the farmer's specific query directly, thoroughly, and accurately. Do NOT hallucinate.
+Always answer the farmer's specific query directly, thoroughly, and accurately in the EXACT SAME LANGUAGE as the farmer's input. Do NOT hallucinate.
 If the farmer asks about fertilizers, sowing dates, pest control, weather, or market rates, provide accurate, practical, actionable agricultural advice.
 
 Guidance:
