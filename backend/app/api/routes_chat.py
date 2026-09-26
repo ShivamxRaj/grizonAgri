@@ -370,7 +370,7 @@ async def _generate_advisory_response(
         return await _build_greeting_response(farmer_name, lang)
 
     # 1. Mandi Market Prices Intent
-    if intent == "MANDI" or any(k in q_lower for k in ["mandi", "rate", "price", "ਭਾਅ", "भाव", "दाम", "quintal"]):
+    if intent == "MANDI" or any(k in q_lower for k in ["mandi", "rate", "price", "ਭਾਅ", "भाव", "दाम", "quintal", "apmc", "bhav", "bhaa"]):
         # Dynamic crop detection for Mandi price
         if any(k in q_lower for k in ["paddy", "rice", "ਝੋਨਾ", "धान", "basmati"]):
             if lang == "pa":
