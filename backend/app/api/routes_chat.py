@@ -329,15 +329,12 @@ Guidance:
     if raw_info:
         # Clean up web URLs and technical noise from snippets
         import re
-        clean_text = re.sub(r'https?://\S+|www\.\S+', '', raw_info)
-        clean_text = re.sub(r'[â€•â€¢â€ºÃ©â€™]+', '', clean_text)
+        clean_text = re.sub(r'https?://\S+|www\.\S+|Live Information:|[â€•â€¢â€ºÃ©â€™\t]+', ' ', raw_info)
         clean_text = re.sub(r'\s+', ' ', clean_text).strip()
 
-        # Format into clear farmer points
-        snippets = [s.strip() for s in clean_text.split("•") if len(s.strip()) > 15]
-        formatted_bullets = []
-        for idx, snip in enumerate(snippets[:3]):
-            formatted_bullets.append(f"• {snip}")
+        # Format into clean separate farmer points
+        parts = [p.strip() for p in re.split(r'(?<=[.:!?])\s+', clean_text) if len(p.strip()) > 25 and not any(w in p.lower() for w in ['home', 'http', 'yara', 'soilpro'])]
+        formatted_bullets = [f"• {p}" for p in parts[:4]]
 
         if formatted_bullets:
             intro = "🌾 **मुख्य जानकारी (Key Points):**\n\n" if lang == "hi" else ("🌾 **ਮੁੱਖ ਜਾਣਕਾਰੀ (Key Points):**\n\n" if lang == "pa" else "🌾 **Key Farmers Advisory Points:**\n\n")
