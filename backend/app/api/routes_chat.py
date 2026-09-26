@@ -308,8 +308,9 @@ Guidance:
             temperature=0.3,
             max_tokens=400
         )
-        if res and res.strip():
-            return res.strip()
+    except Exception as e:
+        logger.warning("llm_response_generation_error", error=str(e))
+
     # If LLM API call timed out, build dynamic response from RAG documents or search results
     if rag_result and rag_result.get("documents"):
         return "\n\n".join(rag_result["documents"][:2])
