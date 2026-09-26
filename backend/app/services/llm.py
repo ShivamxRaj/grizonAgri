@@ -14,7 +14,7 @@ async def call_deepseek(
     prompt: str,
     system_prompt: str = "",
     temperature: float = 0.3,
-    max_tokens: int = 400
+    max_tokens: int = 500
 ) -> Optional[str]:
     """Call DeepSeek chat API directly via HTTP."""
     if not settings.DEEPSEEK_API_KEY:
@@ -38,7 +38,7 @@ async def call_deepseek(
             "max_tokens": max_tokens
         }
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=25.0) as client:
             resp = await client.post(url, headers=headers, json=payload)
             if resp.status_code == 200:
                 data = resp.json()
@@ -57,13 +57,19 @@ async def call_groq(
     prompt: str,
     system_prompt: str = "",
     temperature: float = 0.3,
-    max_tokens: int = 400
+    max_tokens: int = 500
 ) -> Optional[str]:
     """Call Groq chat API directly via HTTP with valid model names."""
     if not settings.GROQ_API_KEY or settings.GROQ_API_KEY == "your_groq_api_key_here":
         return None
 
-    models_to_try = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]
+    models_to_try = [
+        "qwen/qwen3.8-27b",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant"
+    ]
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
         "Content-Type": "application/json",
@@ -83,7 +89,7 @@ async def call_groq(
                 "temperature": temperature,
                 "max_tokens": max_tokens
             }
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=25.0) as client:
                 resp = await client.post(url, headers=headers, json=payload)
                 if resp.status_code == 200:
                     data = resp.json()
@@ -103,7 +109,7 @@ async def generate_llm_response(
     system_prompt: str = "",
     primary_provider: str = "deepseek",
     temperature: float = 0.3,
-    max_tokens: int = 400
+    max_tokens: int = 500
 ) -> Optional[str]:
     """
     Generate response with primary provider and instant failover to secondary provider.
