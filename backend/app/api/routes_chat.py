@@ -253,32 +253,42 @@ async def generate_groq_llm_response(
     intent: str,
     lang: str,
     card_data: StructuredCard,
-    farmer_name: Optional[str] = None
+    farmer_name: Optional[str] = None,
+    rag_result: Optional[dict] = None,
+    weather_data: Optional[dict] = None
 ) -> str:
-    """Uses dual LLM service (DeepSeek primary + Groq failover) to generate dynamic natural language advisory."""
+    """Uses dual LLM service (DeepSeek primary + Groq failover) to generate dynamic, accurate natural language advisory."""
     display_name = (farmer_name or "").strip().split()[0] if farmer_name else "Farmer"
-    card_context = f"Title: {card_data.title}\nDetails: " + " | ".join(card_data.bullets) + (f"\nDosage/Window: {card_data.dosage}" if card_data.dosage else "")
 
-    lang_instruction = (
-        "Respond strictly in clear, professional English. Do NOT mix Hindi or Hinglish words." if lang == "en" else (
-            "Respond strictly in pure Hindi (हिन्दी). Address the farmer politely." if lang == "hi" else (
-                "Respond strictly in pure Punjabi (ਪੰਜਾਬੀ). Address the farmer with Sat Sri Akal." if lang == "pa" else "Respond in clear English."
-            )
-        )
-    )
+    lang_code = (lang or "pa").split("-")[0].lower()
+    if lang_code == "hi":
+        lang_instruction = "Respond in warm, respectful, polite Hindi or Hinglish as appropriate for an Indian farmer. Address the farmer politely."
+    elif lang_code == "pa":
+        lang_instruction = "Respond in warm, respectful, polite Punjabi (ਪੰਜਾਬੀ). Address the farmer warmly with Sat Sri Akal."
+    else:
+        lang_instruction = "Respond in warm, polite, crystal-clear English. Address the farmer warmly."
 
-    system_prompt = f"""You are Grizon Agri AI, an exceptionally calm, polite, respectful, warm, and pleasant agricultural assistant for Indian farmers.
-Always address the farmer with warm respect (e.g. Sat Sri Akal / Namaste / Hello {display_name} Ji).
-Provide a concise, supportive, empathetic, and crystal-clear response using the following verified live data:
+    rag_text = ""
+    if rag_result and rag_result.get("documents"):
+        rag_text = "\n[VERIFIED KNOWLEDGE BASE / PAU PACKAGE OF PRACTICES]\n" + "\n".join(rag_result["documents"])
 
-[VERIFIED LIVE CONTEXT]
-{card_context}
+    weather_text = ""
+    if weather_data and isinstance(weather_data, dict):
+        weather_text = f"\n[LIVE WEATHER CONTEXT]\nLocation: {weather_data.get('district', 'Punjab')}, Temp: {weather_data.get('today_temp', 30)}°C, Condition: {weather_data.get('today_condition', 'Clear')}, Wind: {weather_data.get('today_wind_speed', 10)} km/h, Humidity: {weather_data.get('today_humidity', 50)}%"
 
-Format guidelines:
-- Keep the tone calm, encouraging, practical, and highly respectful.
+    system_prompt = f"""You are Grizon Agri AI, an expert, warm, calm, polite, and highly accurate agricultural AI assistant for Indian farmers.
+Always answer the farmer's specific query directly, thoroughly, and accurately. Do NOT hallucinate.
+If the farmer asks about fertilizers, sowing dates, pest control, weather, or market rates, provide accurate, practical, actionable agricultural advice.
+
+Guidance:
 - {lang_instruction}
-- Directly answer the farmer's question using the provided context.
+- Provide specific names of fertilizers (e.g. Urea, DAP, MOP, Zinc Sulphate), application timings (sowing stage, tillering, panicle initiation), and exact recommended dosages per acre when asked.
+- Keep the tone respectful, encouraging, and calm.
+
+{rag_text}
+{weather_text}
 """
+
     try:
         from app.services.llm import generate_llm_response
         res = await generate_llm_response(
@@ -286,15 +296,14 @@ Format guidelines:
             system_prompt=system_prompt,
             primary_provider="deepseek",
             temperature=0.3,
-            max_tokens=300
+            max_tokens=400
         )
-
-        if res:
-            return res
+        if res and res.strip():
+            return res.strip()
     except Exception as e:
-        logger.warning("llm_response_fallback_to_card", error=str(e))
+        logger.warning("llm_response_generation_error", error=str(e))
 
-    return " ".join(card_data.bullets[:2]) if card_data.bullets else "Advisory details provided."
+    return "Hello! I am your Grizon Agri AI Assistant. Please ask any question regarding crop health, fertilizer timing, mandi rates, or weather forecast."
 
 
 async def _build_greeting_response(farmer_name: Optional[str], lang: str) -> tuple[str, StructuredCard]:
@@ -352,251 +361,51 @@ async def _generate_advisory_response(
     farmer_name: Optional[str] = None,
     district: Optional[str] = "Ludhiana"
 ) -> tuple[str, StructuredCard]:
-    """Generates precise advisory recommendation and visual response card based on intent."""
-
+    """Generates dynamic, non-hallucinated advisory recommendation directly via DeepSeek / Groq LLM without hardcoded templates."""
     q_lower = query.lower().strip()
 
+    # Short greetings first
     greeting_triggers = [
         "hyy", "hy", "hii", "hi", "hello", "hey", "heyy", "hlo", "namaste", "नमस्ते", 
         "ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ", "ਸਤਿ ਸ਼੍ਰੀ ਅਕਾਲ", "sat sri akal", "sat shri akal", "ssa", 
         "good morning", "good afternoon", "good evening", "good night", "greetings", 
-        "ram ram", "ਰਾਮ ਰਾਮ", "राम राम", "pranam", "ਪ੍ਰਣਾਮ", "प्रणाम",
-        "kaise ho", "kaise ho aap", "kya haal hai", "kya haal h", "kasa ho", "kasa ho aap",
-        "kivai ho", "kivda ho", "kivda ho aap", "how are you", "how r u", "kya hal hai"
+        "ram ram", "ਰਾਮ ਰਾਮ", "राम राम", "pranam", "ਪ੍ਰਣਾਮ", "प्रणाम"
     ]
-
-    # 0. Greeting / Conversational Intent
-    if intent == "GREETING" or any(g in q_lower for g in greeting_triggers) or (len(q_lower.split()) <= 4 and any(g in q_lower.split() for g in greeting_triggers)):
+    if (intent == "GREETING" or any(g == q_lower for g in greeting_triggers)) and len(q_lower.split()) <= 2:
         return await _build_greeting_response(farmer_name, lang)
 
-    # 1. Mandi Market Prices Intent
-    if intent == "MANDI" or any(k in q_lower for k in ["mandi", "rate", "price", "ਭਾਅ", "भाव", "दाम", "quintal", "apmc", "bhav", "bhaa"]):
-        # Dynamic crop detection for Mandi price
-        if any(k in q_lower for k in ["paddy", "rice", "ਝੋਨਾ", "धान", "basmati"]):
-            if lang == "pa":
-                title = "ਝੋਨਾ / ਬਾਸਮਤੀ ਮੰਡੀ ਭਾਅ"
-                bullets = [
-                    "ਅੰਮ੍ਰਿਤਸਰ ਮੰਡੀ ਵਿੱਚ ਬਾਸਮਤੀ 1121 ਦਾ ਭਾਅ ₹4,300/ਕੁਇੰਟਲ ਹੈ",
-                    "ਲੁਧਿਆਣਾ ਮੰਡੀ ਵਿੱਚ ਝੋਨਾ PR-126 ਦਾ ਰੇਟ ₹2,320/ਕੁਇੰਟਲ ਹੈ",
-                    "ਸਰਕਾਰੀ MSP ਝੋਨਾ ਰੇਟ: ₹2,300/ਕੁਇੰਟਲ ਪੂਰਾ ਦਿੱਤਾ ਜਾ ਰਿਹਾ ਹੈ"
-                ]
-                dosage = "ਅੰਮ੍ਰਿਤਸਰ ਗ੍ਰੇਨ ਮਾਰਕੀਟ (Paddy APMC)"
-            elif lang == "hi":
-                title = "धान / बासमती मंडी भाव"
-                bullets = [
-                    "अमृतसर मंडी में बासमती 1121 का भाव ₹4,300/क्विंटल है",
-                    "लुधियाना मंडी में धान PR-126 का भाव ₹2,320/क्विंटल है",
-                    "सरकारी MSP दर ₹2,300/क्विंटल गारंटीकृत है"
-                ]
-                dosage = "अमृतसर मंडी (Paddy APMC)"
-            else:
-                title = "PADDY & BASMATI MANDI RATES"
-                bullets = [
-                    "Paddy Basmati 1121 rate in Amritsar Grain Market is ₹4,300/quintal",
-                    "Paddy PR-126 rate in Ludhiana APMC is ₹2,320/quintal",
-                    "Government MSP rate: ₹2,300/quintal guaranteed"
-                ]
-                dosage = "Amritsar Grain APMC Market"
-
-        elif any(k in q_lower for k in ["cotton", "ਨਰਮਾ", "ਕਪਾਹ", "कपास"]):
-            if lang == "pa":
-                title = "ਨਰਮਾ / ਕਪਾਹ ਮੰਡੀ ਭਾਅ"
-                bullets = [
-                    "ਬਠਿੰਡਾ ਮੰਡੀ ਵਿੱਚ ਦੇਸੀ BT ਨਰਮਾ ਦਾ ਭਾਅ ₹7,100/ਕੁਇੰਟਲ ਹੈ",
-                    "ਮਾਨਸਾ ਮੰਡੀ ਵਿੱਚ ਕਪਾਹ ਦਾ ਰੇਟ ₹7,050/ਕੁਇੰਟਲ ਹੈ",
-                    "ਪਿਛਲੇ ਹਫ਼ਤੇ ਨਾਲੋਂ ₹50/ਕੁਇੰਟਲ ਦਾ ਵਾਧਾ ਦਰਜ ਕੀਤਾ ਗਿਆ"
-                ]
-                dosage = "ਬਠਿੰਡਾ ਮੰਡੀ (Bathinda APMC)"
-            else:
-                title = "COTTON MANDI MARKET RATES"
-                bullets = [
-                    "Cotton Desi BT rate in Bathinda Mandi is ₹7,100/quintal",
-                    "Cotton rate in Mansa Market is ₹7,050/quintal",
-                    "Price increased by +₹50/quintal this week"
-                ]
-                dosage = "Bathinda APMC Market"
-
-        elif any(k in q_lower for k in ["mustard", "ਸਰ੍ਹੋਂ", "सरसों"]):
-            title = "MUSTARD / SARON MANDI RATES"
-            bullets = [
-                "Mustard Kala Saron rate in Karnal APMC is ₹5,450/quintal",
-                "Mustard rate in Hisar Mandi is ₹5,400/quintal",
-                "MSP Benchmark: ₹5,650/quintal"
-            ]
-            dosage = "Karnal & Hisar APMC Markets"
-
-        else:
-            # Default Wheat Mandi
-            if lang == "pa":
-                title = "ਤਾਜ਼ਾ ਮੰਡੀ ਭਾਅ — ਕਣਕ (Wheat)"
-                bullets = [
-                    "ਲੁਧਿਆਣਾ ਮੰਡੀ ਵਿੱਚ ਅੱਜ ਕਣਕ (Wheat) ਦਾ ਔਸਤ ਭਾਅ ₹2,275/ਕੁਇੰਟਲ ਹੈ",
-                    "ਹਿਸਾਰ ਮੰਡੀ ਵਿੱਚ ਕਣਕ (PBW-725) ਦਾ ਰੇਟ ₹2,265/ਕੁਇੰਟਲ ਚੱਲ ਰਿਹਾ ਹੈ",
-                    "ਸਰਕਾਰੀ MSP ਰੇਟ ਦੀ ਪੂਰੀ ਗਾਰੰਟੀ ਹੈ"
-                ]
-                dosage = "ਲੁਧਿਆਣਾ ਮੰਡੀ (Ludhiana APMC)"
-            elif lang == "hi":
-                title = "ताज़ा मंडी भाव — गेहूं (Wheat)"
-                bullets = [
-                    "लुधियाना मंडी में गेहूं का औसत भाव ₹2,275/क्विंटल है",
-                    "हिसार मंडी में गेहूं (PBW-725) का भाव ₹2,265/क्विंटल है",
-                    "सरकारी MSP दर गारंटीकृत है"
-                ]
-                dosage = "लुधियाना मंडी (Ludhiana APMC)"
-            else:
-                title = "LIVE MANDI MARKET RATES — WHEAT"
-                bullets = [
-                    "Wheat APMC rate in Ludhiana Mandi today is ₹2,275/quintal",
-                    "Wheat PBW-725 rate in Hisar Mandi is ₹2,265/quintal",
-                    "Government MSP rates guaranteed"
-                ]
-                dosage = "Ludhiana APMC Market"
-
-        card = StructuredCard(severity="medium", title=title, bullets=bullets, dosage=dosage)
-        text = await generate_groq_llm_response(query, intent, lang, card, farmer_name)
-        if text and text.strip():
-            card.bullets = [text]
-        return text, card
-
-    # 2. Disease Diagnosis Intent
-    elif intent == "DISEASE" or any(k in q_lower for k in ["disease", "pest", "yellow", "spots", "rust", "fungus", "ਤੇਲਾ", "ਕੁੰਗੀ", "ਰੋਗ", "ਰਤੂਆ", "रतुआ", "कीड़ा"]):
-        if lang == "pa":
-            title = "ਚੇਤਾਵਨੀ: ਪੀਲੀ ਕੁੰਗੀ / ਪੀਲਾ ਤੇਲਾ"
-            bullets = [
-                "ਕਣਕ ਤੇ ਪੀਲੀ ਕੁੰਗੀ (Yellow Rust) ਦੇ ਲੱਛਣ ਹਨ",
-                "200 ਮਿ.ਲੀ. ਟਿਲਟ (Propiconazole 25 EC) ਪਾਓ",
-                "200 ਲੀਟਰ ਪਾਣੀ ਵਿੱਚ ਮਿਲਾ ਕੇ ਪ੍ਰਤੀ ਏਕੜ ਛਿੜਕਾਅ ਕਰੋ"
-            ]
-            dosage = "2.5 ਪੰਪ / ਏਕੜ (15L ਟੈਂਕ)"
-        elif lang == "hi":
-            title = "चेतावनी: पीला रतुआ"
-            bullets = [
-                "गेहूं पर पीला रतुआ (Yellow Rust) के लक्षण हैं",
-                "200 मिली टिल्ट (Propiconazole 25 EC) डालें",
-                "200 लीटर पानी में मिलाकर प्रति एकड़ छिड़काव करें"
-            ]
-            dosage = "2.5 पंप / एकड़"
-        else:
-            title = "WARNING: YELLOW RUST DETECTED"
-            bullets = [
-                "Symptoms of Yellow Rust / Aphids detected on crop",
-                "Apply 200 ml Tilt (Propiconazole 25 EC)",
-                "Mix in 200 Liters of water and spray per acre"
-            ]
-            dosage = "2.5 Pumps / Acre"
-
-        card = StructuredCard(severity="high", title=title, bullets=bullets, dosage=dosage)
-        text = await generate_groq_llm_response(query, intent, lang, card, farmer_name)
-        if text and text.strip():
-            card.bullets = [text]
-        return text, card
-
-    # 3. Weather Forecast & Spray Window Intent (Dynamic Live Weather Fetching)
-    elif intent == "WEATHER" or any(k in q_lower for k in ["weather", "rain", "forecast", "spray", "ਮੀਂਹ", "ਮੌਸਮ", "मौसम", "बारिश", "pucha", "pucho"]):
+    weather_dict = None
+    if intent == "WEATHER" or any(k in q_lower for k in ["weather", "rain", "forecast", "spray", "ਮੀਂਹ", "ਮੌਸਮ", "मौसम", "बारिश"]):
         from app.api.routes_weather import fetch_weather_forecast
-
         target_dist, target_state = extract_district_from_query(query, default=district or "Ludhiana")
-        weather_res = await fetch_weather_forecast(district=target_dist, state=target_state, language=lang)
-
-        status_flag = weather_res.today_status.lower() # 'safe', 'caution', 'avoid'
-        severity_val = "high" if status_flag == "avoid" else ("medium" if status_flag == "caution" else "info")
-
-        loc_display = weather_res.district
-
-        if lang == "pa":
-            title = f"ਮੌਸਮ ਅਤੇ ਛਿੜਕਾਅ ਸਲਾਹ — {loc_display}"
-            bullet_1 = f"{loc_display} ਵਿੱਚ ਅੱਜ ਮੌਸਮ {weather_res.today_condition} ({weather_res.today_temp}°C) ਹੈ, ਹਵਾ {weather_res.today_wind_speed} km/h ਹੈ ਅਤੇ ਸਲਾਭਤਾ {weather_res.today_humidity}% ਹੈ।"
-            bullet_2 = "ਮੀਂਹ/ਤੇਜ਼ ਹਵਾ ਦੀ ਸੰਭਾਵਨਾ ਕਾਰਨ ਛਿੜਕਾਅ ਨਾ ਕਰੋ!" if status_flag == "avoid" else (
-                "ਹਵਾ ਤੇਜ਼ ਹੈ, ਸਾਵਧਾਨੀ ਨਾਲ ਛਿੜਕਾਅ ਕਰੋ" if status_flag == "caution" else "ਸਪਰੇਅ ਕਰਨ ਲਈ ਅੱਜ ਦਾ ਦਿਨ ਪੂਰੀ ਤਰ੍ਹਾਂ ਸੁਰੱਖਿਅਤ (SAFE) ਹੈ।"
-            )
-            bullet_3 = weather_res.today_advisory
-            dosage = "ਮੀਂਹ ਦੀ ਚੇਤਾਵਨੀ" if status_flag == "avoid" else "ਸਵੇਰੇ 11 ਵਜੇ ਤੋਂ ਪਹਿਲਾਂ"
-        elif lang == "hi":
-            title = f"मौसम एवं छिड़काव सलाह — {loc_display}"
-            bullet_1 = f"{loc_display} में आज मौसम {weather_res.today_condition} ({weather_res.today_temp}°C) है, हवा {weather_res.today_wind_speed} km/h है और आर्द्रता {weather_res.today_humidity}% है।"
-            bullet_2 = "बारिश/तेज़ हवा के कारण छिड़काव न करें!" if status_flag == "avoid" else (
-                "हवा तेज़ है, सावधानी से छिड़काव करें" if status_flag == "caution" else "स्प्रे करने के लिए आज का दिन पूरी तरह सुरक्षित (SAFE) है।"
-            )
-            bullet_3 = weather_res.today_advisory
-            dosage = "बारिश चेतावनी" if status_flag == "avoid" else "सुबह 11 बजे से पहले"
-        else:
-            title = f"WEATHER & SPRAY WINDOW — {loc_display.upper()}"
-            bullet_1 = f"Today weather in {loc_display} is {weather_res.today_condition} ({weather_res.today_temp}°C) with wind speed of {weather_res.today_wind_speed} km/h and {weather_res.today_humidity}% humidity."
-            bullet_2 = f"Chemical Spray Status: {weather_res.today_status}."
-            bullet_3 = weather_res.today_advisory
-            dosage = "Avoid Spray Today" if status_flag == "avoid" else "Optimal Window: Before 11:00 AM"
-
-        bullets = [bullet_1, bullet_2, bullet_3]
-        card = StructuredCard(severity=severity_val, title=title, bullets=bullets, dosage=dosage)
-        text = await generate_groq_llm_response(query, intent, lang, card, farmer_name)
-        if text and text.strip():
-            card.bullets = [text]
-        return text, card
-
-    # 4. Government Scheme Intent
-    elif intent == "SCHEME" or any(k in q_lower for k in ["scheme", "pm", "kisan", "subsidy", "योजना", "ਸਕੀਮ"]):
-        if lang == "hi":
-            title = "प्रधानमंत्री किसान सम्मान निधि योजना"
-            bullets = [
-                "PM-Kisan योजना के तहत किसानों को वार्षिक ₹6,000 तीन किश्तों में दिए जाते हैं",
-                "अगली किश्त आपके बैंक खाते में DBT के माध्यम से ट्रांसफर की जाएगी",
-                "आवश्यक दस्तावेज: आधार कार्ड, खतौनी भूमि रिकॉर्ड, एवं बैंक पासबुक"
-            ]
-            dosage = "आधिकारिक स्रोत: pmkisan.gov.in"
-        elif lang == "pa":
-            title = "PM ਕਿਸਾਨ ਸਨਮਾਨ ਨਿਧੀ ਸਕੀਮ"
-            bullets = [
-                "PM-Kisan ਸਕੀਮ ਤਹਿਤ ਕਿਸਾਨਾਂ ਨੂੰ ਸਾਲਾਨਾ ₹6,000 ਤਿੰਨ ਕਿਸ਼ਤਾਂ ਵਿੱਚ ਮਿਲਦੇ ਹਨ",
-                "ਅਗਲੀ ਕਿਸ਼ਤ direct bank transfer (DBT) ਰਾਹੀਂ ਆਵੇਗੀ",
-                "ਜ਼ਰੂਰੀ ਦਸਤਾਵੇਜ਼: ਆਧਾਰ ਕਾਰਡ, ਜਮ੍ਹਾਂਬੰਦੀ/ਖੇਤ ਰਿਕਾਰਡ, ਅਤੇ ਬੈਂਕ ਖਾਤਾ"
-            ]
-            dosage = "ਸਰਕਾਰੀ ਪੋਰਟਲ: pmkisan.gov.in"
-        else:
-            title = "PM-KISAN SAMMAN NIDHI SCHEME"
-            bullets = [
-                "Under PM-Kisan scheme, ₹6,000 per year is provided in 3 installments of ₹2,000",
-                "Direct Benefit Transfer (DBT) credited straight into linked bank account",
-                "Required Documents: Aadhaar, Land Revenue Record (Khasra/Khatauni), Bank Passbook"
-            ]
-            dosage = "Official Source: pmkisan.gov.in"
-
-        card = StructuredCard(severity="info", title=title, bullets=bullets, dosage=dosage)
-        text = await generate_groq_llm_response(query, intent, lang, card, farmer_name)
-        if text and text.strip():
-            card.bullets = [text]
-        return text, card
-
-    # 5. Default General Farm Advisory & Location Routing
+        w_res = await fetch_weather_forecast(district=target_dist, state=target_state, language=lang)
+        weather_dict = w_res.dict() if hasattr(w_res, 'dict') else {}
+        card_title = f"WEATHER & SPRAY ADVISORY — {target_dist.upper()}"
+        dosage = f"Spray Status: {w_res.today_status}"
+    elif intent == "MANDI" and any(k in q_lower for k in ["mandi", "rate", "price", "ਭਾਅ", "भाव", "दाम", "quintal", "apmc", "bhav"]):
+        card_title = "LIVE MANDI MARKET ADVISORY"
+        dosage = "APMC Market Benchmark"
+    elif intent == "DISEASE" or any(k in q_lower for k in ["disease", "pest", "yellow", "spots", "rust", "fungus", "ਤੇਲਾ", "ਕੁੰਗੀ", "ਰੋਗ", "ਰਤੂਆ", "रतुआ", "कीड़ा"]):
+        card_title = "CROP DISEASE & PEST CONTROL ADVISORY"
+        dosage = "PAU Recommended Dosage"
     else:
-        # Check if query contains any location or place name
-        target_dist, target_state = extract_district_from_query(query, default=None)
-        if target_dist and target_dist != "Ludhiana":
-            from app.api.routes_weather import fetch_weather_forecast
-            weather_res = await fetch_weather_forecast(district=target_dist, state=target_state, language=lang)
-            loc_display = weather_res.district
-            title = f"कृषि एवं मौसम सलाह — {loc_display}" if lang == "hi" else (f"ਖੇਤੀਬਾੜੀ ਅਤੇ ਮੌਸਮ ਸਲਾਹ — {loc_display}" if lang == "pa" else f"FARM & WEATHER ADVISORY — {loc_display.upper()}")
-            bullets = [
-                f"{loc_display} me temperature {weather_res.today_temp}°C hai, wind speed {weather_res.today_wind_speed} km/h hai aur humidity {weather_res.today_humidity}% hai.",
-                f"Spray Window Status: {weather_res.today_status}.",
-                weather_res.today_advisory
-            ]
-            card = StructuredCard(severity="info", title=title, bullets=bullets, dosage="Subah 11 baje se pehle")
-            text = await generate_groq_llm_response(query, intent, lang, card, farmer_name)
-            if text and text.strip():
-                card.bullets = [text] + bullets[:2]
-            return text, card
+        card_title = "AGRICULTURAL FARM ADVISORY"
+        dosage = "Grizon Agri AI Assistant"
 
-        card = StructuredCard(
-            severity="info", 
-            title="Grizon Agri Advisory" if lang == "en" else ("कृषि सलाह" if lang == "hi" else "ਖੇਤੀਬਾੜੀ ਸਲਾਹ"), 
-            bullets=[], 
-            dosage="Grizon Agri AI Assistant"
-        )
-        text = await generate_groq_llm_response(query, intent, lang, card, farmer_name)
-        if text and text.strip():
-            card.bullets = [text]
-        else:
-            default_txt = "Hello! I am your Grizon Agri AI Assistant. How can I help you today with your farm, crops, weather, or mandi rates?"
-            card.bullets = [default_txt]
-            text = default_txt
-        return text, card
+    text = await generate_groq_llm_response(
+        query=query, 
+        intent=intent, 
+        lang=lang, 
+        card_data=StructuredCard(severity="info", title=card_title, bullets=[]), 
+        farmer_name=farmer_name, 
+        rag_result=rag_result,
+        weather_data=weather_dict
+    )
+
+    card = StructuredCard(
+        severity="info",
+        title=card_title,
+        bullets=[text],
+        dosage=dosage
+    )
+    return text, card
