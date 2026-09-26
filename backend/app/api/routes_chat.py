@@ -313,20 +313,37 @@ Guidance:
     except Exception as e:
         logger.warning("llm_response_generation_error", error=str(e))
 
-    # Dynamic fallback using CRAG Web Search / Knowledge Base content
+    # Clean and format dynamic fallback into simple bullet points
+    raw_info = ""
     if rag_result and rag_result.get("content"):
-        return rag_result["content"]
+        raw_info = rag_result["content"]
+    else:
+        try:
+            from app.services.web_search import search_agri_web
+            web_res = await search_agri_web(query)
+            if web_res:
+                raw_info = "\n".join([f"• {w.get('snippet', w.get('title', ''))}" for w in web_res])
+        except Exception:
+            pass
 
-    # Fallback to Serper real-time web search for the user's specific query
-    try:
-        from app.services.web_search import search_agri_web
-        web_res = await search_agri_web(query)
-        if web_res:
-            return "\n".join([f"• {w['title']}: {w['snippet']}" for w in web_res])
-    except Exception:
-        pass
+    if raw_info:
+        # Clean up web URLs and technical noise from snippets
+        import re
+        clean_text = re.sub(r'https?://\S+|www\.\S+', '', raw_info)
+        clean_text = re.sub(r'[â€•â€¢â€ºÃ©â€™]+', '', clean_text)
+        clean_text = re.sub(r'\s+', ' ', clean_text).strip()
 
-    return f"Regarding your query on '{query}': Please inspect your crop for leaf discoloration or pest activity, ensure proper soil moisture, and consult your nearest Krishi Vigyan Kendra (KVK) expert for customized field advice."
+        # Format into clear farmer points
+        snippets = [s.strip() for s in clean_text.split("•") if len(s.strip()) > 15]
+        formatted_bullets = []
+        for idx, snip in enumerate(snippets[:3]):
+            formatted_bullets.append(f"• {snip}")
+
+        if formatted_bullets:
+            intro = "🌾 **मुख्य जानकारी (Key Points):**\n\n" if lang == "hi" else ("🌾 **ਮੁੱਖ ਜਾਣਕਾਰੀ (Key Points):**\n\n" if lang == "pa" else "🌾 **Key Farmers Advisory Points:**\n\n")
+            return intro + "\n\n".join(formatted_bullets)
+
+    return f"🌾 **कृषि सलाह:**\n\n• अपने खेत में फसल की जांच करें।\n• सही मात्रा में सिंचाई और खाद प्रबंधन रखें।\n• अधिक जानकारी के लिए नजदीकी KVK विशेषज्ञ से संपर्क करें।"
 
 
 async def _build_greeting_response(farmer_name: Optional[str], lang: str) -> tuple[str, StructuredCard]:
