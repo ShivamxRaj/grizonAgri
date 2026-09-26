@@ -357,14 +357,16 @@ async def _generate_advisory_response(
     q_lower = query.lower().strip()
 
     greeting_triggers = [
-        "hyy", "hy", "hii", "hi", "hello", "hey", "heyy", "namaste", "नमस्ते", 
+        "hyy", "hy", "hii", "hi", "hello", "hey", "heyy", "hlo", "namaste", "नमस्ते", 
         "ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ", "ਸਤਿ ਸ਼੍ਰੀ ਅਕਾਲ", "sat sri akal", "sat shri akal", "ssa", 
         "good morning", "good afternoon", "good evening", "good night", "greetings", 
-        "ram ram", "ਰਾਮ ਰਾਮ", "राम राम", "pranam", "ਪ੍ਰਣਾਮ", "प्रणाम"
+        "ram ram", "ਰਾਮ ਰਾਮ", "राम राम", "pranam", "ਪ੍ਰਣਾਮ", "प्रणाम",
+        "kaise ho", "kaise ho aap", "kya haal hai", "kya haal h", "kasa ho", "kasa ho aap",
+        "kivai ho", "kivda ho", "kivda ho aap", "how are you", "how r u", "kya hal hai"
     ]
 
-    # 0. Greeting Intent
-    if intent == "GREETING" or any(g == q_lower for g in greeting_triggers) or (len(q_lower.split()) <= 4 and any(g in q_lower.split() for g in greeting_triggers)):
+    # 0. Greeting / Conversational Intent
+    if intent == "GREETING" or any(g in q_lower for g in greeting_triggers) or (len(q_lower.split()) <= 4 and any(g in q_lower.split() for g in greeting_triggers)):
         return await _build_greeting_response(farmer_name, lang)
 
     # 1. Mandi Market Prices Intent
@@ -453,7 +455,7 @@ async def _generate_advisory_response(
         card = StructuredCard(severity="medium", title=title, bullets=bullets, dosage=dosage)
         text = await generate_groq_llm_response(query, intent, lang, card, farmer_name)
         if text and text.strip():
-            card.bullets = [text] + bullets[:2]
+            card.bullets = [text]
         return text, card
 
     # 2. Disease Diagnosis Intent
@@ -486,7 +488,7 @@ async def _generate_advisory_response(
         card = StructuredCard(severity="high", title=title, bullets=bullets, dosage=dosage)
         text = await generate_groq_llm_response(query, intent, lang, card, farmer_name)
         if text and text.strip():
-            card.bullets = [text] + bullets[1:3]
+            card.bullets = [text]
         return text, card
 
     # 3. Weather Forecast & Spray Window Intent (Dynamic Live Weather Fetching)
@@ -528,7 +530,7 @@ async def _generate_advisory_response(
         card = StructuredCard(severity=severity_val, title=title, bullets=bullets, dosage=dosage)
         text = await generate_groq_llm_response(query, intent, lang, card, farmer_name)
         if text and text.strip():
-            card.bullets = [text] + bullets[:2]
+            card.bullets = [text]
         return text, card
 
     # 4. Government Scheme Intent
@@ -561,7 +563,7 @@ async def _generate_advisory_response(
         card = StructuredCard(severity="info", title=title, bullets=bullets, dosage=dosage)
         text = await generate_groq_llm_response(query, intent, lang, card, farmer_name)
         if text and text.strip():
-            card.bullets = [text] + bullets[:2]
+            card.bullets = [text]
         return text, card
 
     # 5. Default General Farm Advisory & Location Routing
@@ -584,33 +586,17 @@ async def _generate_advisory_response(
                 card.bullets = [text] + bullets[:2]
             return text, card
 
-        if lang == "pa":
-            title = "ਖੇਤੀਬਾੜੀ ਸਲਾਹ"
-            bullets = [
-                "ਤੁਹਾਡਾ ਸਵਾਲ ਗ੍ਰੀਜ਼ੋਨ ਐਗਰੀ ਦੁਆਰਾ ਵਿਸ਼ਲੇਸ਼ਣ ਕਰ ਲਿਆ ਗਿਆ ਹੈ",
-                "ਖੇਤ ਵਿੱਚ ਸਹੀ ਨਮੀ ਬਣਾ ਕੇ ਰੱਖੋ",
-                "ਕੀੜਿਆਂ ਦੀ ਹਫ਼ਤੇ ਵਿੱਚ ਦੋ ਵਾਰ ਜਾਂਚ ਕਰੋ"
-            ]
-            dosage = "PAU ਪ੍ਰਮਾਣਿਤ ਸਲਾਹ"
-        elif lang == "hi":
-            title = "कृषि सलाह"
-            bullets = [
-                "आपका प्रश्न ग्रीज़ोन एग्री द्वारा प्राप्त कर लिया गया है",
-                "खेत में उचित नमी बनाए रखें",
-                "कीटों की सप्ताह में दो बार जांच करें"
-            ]
-            dosage = "PAU प्रमाणित सलाह"
-        else:
-            title = "AGRICULTURAL FARM ADVISORY"
-            bullets = [
-                "Your query has been analyzed by Grizon Agri AI",
-                "Maintain balanced soil moisture in field",
-                "Inspect crop twice a week for pest activity"
-            ]
-            dosage = "PAU Recommended"
-
-        card = StructuredCard(severity="info", title=title, bullets=bullets, dosage=dosage)
+        card = StructuredCard(
+            severity="info", 
+            title="Grizon Agri Advisory" if lang == "en" else ("कृषि सलाह" if lang == "hi" else "ਖੇਤੀਬਾੜੀ ਸਲਾਹ"), 
+            bullets=[], 
+            dosage="Grizon Agri AI Assistant"
+        )
         text = await generate_groq_llm_response(query, intent, lang, card, farmer_name)
         if text and text.strip():
-            card.bullets = [text] + bullets[:2]
+            card.bullets = [text]
+        else:
+            default_txt = "Hello! I am your Grizon Agri AI Assistant. How can I help you today with your farm, crops, weather, or mandi rates?"
+            card.bullets = [default_txt]
+            text = default_txt
         return text, card
