@@ -308,14 +308,25 @@ Guidance:
             temperature=0.3,
             max_tokens=400
         )
+        if res and res.strip():
+            return res.strip()
     except Exception as e:
         logger.warning("llm_response_generation_error", error=str(e))
 
-    # If LLM API call timed out, build dynamic response from RAG documents or search results
-    if rag_result and rag_result.get("documents"):
-        return "\n\n".join(rag_result["documents"][:2])
+    # Dynamic fallback using CRAG Web Search / Knowledge Base content
+    if rag_result and rag_result.get("content"):
+        return rag_result["content"]
 
-    return f"Farmers in India typically apply about 110-120 kg of Urea (or 2 bags of DAP + 2.5 bags of Urea) per acre for wheat crop. Apply 1/2 Urea + full DAP at sowing, 1/4 Urea at first irrigation (21 days), and 1/4 Urea at second irrigation."
+    # Fallback to Serper real-time web search for the user's specific query
+    try:
+        from app.services.web_search import search_agri_web
+        web_res = await search_agri_web(query)
+        if web_res:
+            return "\n".join([f"• {w['title']}: {w['snippet']}" for w in web_res])
+    except Exception:
+        pass
+
+    return f"Regarding your query on '{query}': Please inspect your crop for leaf discoloration or pest activity, ensure proper soil moisture, and consult your nearest Krishi Vigyan Kendra (KVK) expert for customized field advice."
 
 
 async def _build_greeting_response(farmer_name: Optional[str], lang: str) -> tuple[str, StructuredCard]:
